@@ -39,31 +39,31 @@ missionMap={
         console.log("任务结束")
     }
 }
-Room.prototype.work=function(){
-    const property=this.memory.prop
-    if(property.power){
+Room.prototype.work=function() {
+    const property = this.memory.prop
+    if (property.power) {
         this.powerSpawn.processPower()
-        if (!this.powerSpawn.store[RESOURCE_ENERGY]){
-            if (this.storage.store[RESOURCE_ENERGY] >= 300000){
-                this.centerTask(this.storage.id,this.powerSpawn.id,RESOURCE_ENERGY,5000)
+        if (!this.powerSpawn.store[RESOURCE_ENERGY]) {
+            if (this.storage.store[RESOURCE_ENERGY] >= 300000) {
+                this.centerTask(this.storage, this.powerSpawn, RESOURCE_ENERGY, 5000)
             }
-        }else if (!this.powerSpawn.store[RESOURCE_POWER]){
-            if (this.storage.store[RESOURCE_POWER] >= 200){
-                this.centerTask(this.storage.id,this.powerSpawn.id,RESOURCE_POWER,100)
+        } else if (!this.powerSpawn.store[RESOURCE_POWER]) {
+            if (this.storage.store[RESOURCE_POWER] >= 200) {
+                this.centerTask(this.storage, this.powerSpawn, RESOURCE_POWER, 100)
             }
         }
     }
-    if (property.upgrade){
-        if (Game.time%1500==0){
-            this.addTask({role:config.upgrader})
+    if (property.upgrade) {
+        if (Game.time % 1500 == 0) {
+            this.addTask({role: config.upgrader})
         }
     }
     this.storage.balance()
-    if(property.factory){
+    if (property.factory) {
         this.factory.work()
     }
     this.terminal.work()
-    for (const m of this.memory.mission){
+    for (const m of this.memory.mission) {
         missionMap[m](this)
     }
     if (this.memory._heal) {
@@ -73,8 +73,7 @@ Room.prototype.work=function(){
         } else {
             Tower.heal(this, cr)
         }
-    }
-    else if (this.memory.enemy) {
+    } else if (this.memory.enemy) {
         for (const event of this.getEventLog()) {
             if (event.event === EVENT_OBJECT_DESTROYED) {
                 if (event.type === STRUCTURE_WALL || event.type === STRUCTURE_RAMPART) {
@@ -84,7 +83,7 @@ Room.prototype.work=function(){
         }
         const enemy = Game.getObjectById(this.memory.enemy);
         if (enemy) {
-            Tower.attack(this,enemy)
+            Tower.attack(this, enemy)
         } else {
             delete this.memory.enemy
         }
@@ -92,11 +91,11 @@ Room.prototype.work=function(){
     if (Game.time % 25 == 0) {
         Tower.repair(this)
     }
-    if (property.pc){
+    if (property.pc) {
         this.pc().work()
-        if (Game.time % 900 == 0) {
-            this.pc().addTask(PWR_OPERATE_STORAGE, this.storage.id)
-        }
+    }
+    if (property.extStore && (!this.storage.effects || this.storage.effects[0].ticksRemaining < 70)) {
+        this.pc().addTask(PWR_OPERATE_STORAGE, this.storage.id)
     }
 }
 /**
@@ -566,11 +565,11 @@ Room.prototype.addLab=function(id){
     }
 }
 Room.prototype.centerTask=function (from,to,res,num){
-    if (this.memory.centerTasks[from]){
+    if (this.memory.centerTasks[from.id]){
         return
     }
-    this.memory.centerTasks[from]={
-        target:to,
+    this.memory.centerTasks[from.id]={
+        target:to.id,
         res:res,
         num:num
     }

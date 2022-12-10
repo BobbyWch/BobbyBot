@@ -1,4 +1,3 @@
-const config = require("./config");
 module.exports= {
     /**
      * @param creep {Creep}
@@ -24,24 +23,24 @@ module.exports= {
             }
             //采集
             if (cm.state === "link") {
-                if (creep.store.getFreeCapacity()) {
-                    creep.harvest(source);
-                }
                 if (creep.store.getFreeCapacity() < 35) {
-                    if(creep.transfer(target, RESOURCE_ENERGY)===ERR_NOT_IN_RANGE){
+                    if (creep.transfer(target, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
                         creep.moveTo(target)
                     }
                     if (target.store[RESOURCE_ENERGY] >= 600) {
-                       // if (creep.room.memory.prop.upgrade){
-                            if (creep.room.upLink.store[RESOURCE_ENERGY]<400){
+                        if (!target.cooldown) {
+                            creep.harvest(source)
+                            if (creep.room.upLink.store[RESOURCE_ENERGY] < 500) {
                                 target.transferEnergy(creep.room.upLink)
-                            }else {
+                            } else {
                                 target.transferEnergy(creep.room.centerLink)
                             }
-                      //  }else{
-      //                      target.transferEnergy(creep.room.centerLink)
-                      //  }
+                        }
+                    } else {
+                        creep.harvest(source)
                     }
+                } else {
+                    creep.harvest(source)
                 }
             } else if (cm.state === "con") {
                 if (target.store.getUsedCapacity() > 1100) {
@@ -68,7 +67,7 @@ module.exports= {
                     creep.room.pc().addTask(PWR_REGEN_SOURCE, source.id)
                 }
             }
-            creep.autoRe(10,["store","state","dontPullMe","ready"])
+            creep.autoRe(10)
         }else {
             if (!cm.target) {
                 creep.say("Need target!");
@@ -267,12 +266,19 @@ module.exports= {
         }else {
             if (creep.memory.working) {
                 if (creep.room.centerLink.store[RESOURCE_ENERGY]) {
+                    if (creep.room.upLink.store[RESOURCE_ENERGY]<500){
+                        creep.room.centerLink.transferEnergy(creep.room.upLink)
+                        return
+                    }
                     if (creep.withdraw(creep.room.centerLink, RESOURCE_ENERGY) === ERR_NOT_IN_RANGE) {
                         creep.moveTo(creep.room.centerLink)
                     } else {
                         creep.memory.working = false;
                     }
                 }else {
+                    if (creep.room.upLink.store[RESOURCE_ENERGY]<350){
+                        creep.room.centerTask(creep.room.storage,creep.room.centerLink,RESOURCE_ENERGY,800)
+                    }
                     creep.centerCarry()
                 }
             } else {
@@ -288,18 +294,15 @@ module.exports= {
     /**
      * @param creep {Creep}
      */
-    upgrader(creep){
-        if (creep.memory.working){
-            if (creep.withdraw(creep.room.upLink,RESOURCE_ENERGY)==ERR_NOT_IN_RANGE){
+    upgrader(creep) {
+        if (creep.upgradeController(creep.room.controller) == ERR_NOT_IN_RANGE) {
+            creep.moveTo(creep.room.controller)
+            return
+        }
+        if (creep.store[RESOURCE_ENERGY] < 50) {
+            if (creep.withdraw(creep.room.upLink, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
                 creep.moveTo(creep.room.upLink)
-            }else {
-                delete creep.memory.working
             }
-        }else {
-            if (creep.upgradeController(creep.room.controller)==ERR_NOT_IN_RANGE){
-                creep.moveTo(creep.room.controller)
-            }
-            creep.workIfEmpty()
         }
     }
 }

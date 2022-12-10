@@ -150,14 +150,14 @@ function assignFactory(){
         if (this.memory.aim){
             const info=factoryInfo[this.memory.aim]
             if (this.store[this.memory.aim]>1000){
-                this.room.centerTask(this.id,this.room.terminal.id,this.memory.aim)
+                this.room.centerTask(this,this.room.terminal,this.memory.aim)
             }
             for (const k in info.level1){
                 if (this.store.getUsedCapacity(k)<info.level1[k]){
                     if (this.room.storage.store[k]){
-                        this.room.centerTask(this.room.storage.id,this.id,k)
+                        this.room.centerTask(this.room.storage,this,k)
                     }else if (this.room.terminal.store[k]){
-                        this.room.centerTask(this.room.terminal.id,this.id,k)
+                        this.room.centerTask(this.room.terminal,this,k)
                     }else {
                         delete this.memory.aim
                     }
@@ -196,7 +196,7 @@ function assignStorage(){
         const store=this.store
         const sT=terminal.store
         if (store[RESOURCE_OPS]>10000&&sT[RESOURCE_OPS]<10000){
-            room.centerTask(this.id,terminal.id,RESOURCE_OPS)
+            room.centerTask(this,terminal,RESOURCE_OPS)
         }
         if (!factory){
             return
@@ -219,22 +219,35 @@ function assignTerminal(){
      * @param amount {number}
      */
     StructureTerminal.prototype.deal=function (orderId,amount){
+        for (const o of this.memory.deals){
+            if (o.id==orderId){
+                return
+            }
+        }
         this.memory.deals.push({id: orderId,amount: amount})
     }
     StructureTerminal.prototype.addSend=function (roomName,type,num){
+        for (const o of this.memory.sends){
+            if (o.target==roomName){
+                return
+            }
+        }
         this.memory.sends.push({target: roomName,type: type,num:num})
     }
     StructureTerminal.prototype.work=function () {
+        if (Game.time%70==0){
+            Channel.reg(this.room)
+        }
         const room = this.room
         if (this.store.getUsedCapacity(RESOURCE_ENERGY) <= 80000) {
             if (this.store.getFreeCapacity() && room.storage.store[RESOURCE_ENERGY] > 5000) {
-                room.centerTask(room.storage.id,this.id,RESOURCE_ENERGY)
+                room.centerTask(room.storage,this,RESOURCE_ENERGY)
             }
-        } else if (this.store.getUsedCapacity(RESOURCE_ENERGY) >= 120000) {
-            room.centerTask(this.id,room.storage.id,RESOURCE_ENERGY)
+        } else if (this.store.getUsedCapacity(RESOURCE_ENERGY) >= 100000) {
+            room.centerTask(this,room.storage,RESOURCE_ENERGY)
         }
         if (this.store.getUsedCapacity(RESOURCE_POWER)) {
-            room.centerTask(this.id,room.storage.id,RESOURCE_POWER)
+            room.centerTask(this,room.storage,RESOURCE_POWER)
         } else if (Game.time % 1598 === 0) {
             if (room.storage.store.getUsedCapacity(RESOURCE_POWER) <= 3000000) {
                 const orders = Game.market.getAllOrders({resourceType: RESOURCE_POWER, type: ORDER_SELL})
@@ -245,17 +258,10 @@ function assignTerminal(){
             }
         }
         if (Game.time % 9837 == 0 && this.store[RESOURCE_OPS]) {
-            const orders = Game.market.getAllOrders({resourceType: RESOURCE_OPS, type: ORDER_BUY})
-            let h = highestOf(orders)
-            if (h && h.price >= 25) {
-                this.deal(h.id, min(h.amount, this.store[RESOURCE_OPS]))
-            }
+            Channel.sell(this,RESOURCE_OPS,25)
         }
         if (Game.time % 588 == 0 && this.room.storage.store.getUsedCapacity("energy") > 700000) {
-            const energy = highestOf(Game.market.getAllOrders({resourceType: RESOURCE_ENERGY, type: ORDER_BUY}))
-            if (energy.price > 12) {
-                this.deal(energy.id, energy.remainingAmount)
-            }
+            Channel.sell(this,RESOURCE_ENERGY,12)
         }
         if (Game.time % 10000 == 0 && this.store[RESOURCE_OXIDANT]) {
             const orders = Game.market.getAllOrders({resourceType: RESOURCE_OXIDANT, type: ORDER_BUY})
@@ -264,10 +270,10 @@ function assignTerminal(){
                 this.deal(highOrder.id, min(this.store.getUsedCapacity(RESOURCE_OXIDANT), highOrder.amount))
             }
         }
-        if (false&&this.room.controller.level != 8 && Game.time % 82 == 0) {
+        if (this.room.controller.level != 8 && Game.time % 82 == 0) {
             const orders = Game.market.getAllOrders({resourceType: RESOURCE_ENERGY, type: ORDER_SELL})
             let highOrder = lowestOf(orders)
-            if (highOrder && highOrder.price <= 5) {
+            if (highOrder && highOrder.price <= 3) {
                 Game.market.deal(highOrder.id, highOrder.amount, "W52S7")
             }
         }
@@ -275,6 +281,8 @@ function assignTerminal(){
         buy(this, "U", 15000)
         buy(this, "L", 15000)
         buy(this, "H", 15000)
+        buy(this, "Z", 15000)
+        buy(this,RESOURCE_ENERGY,100000)
         //传送资源
         if (this.cooldown) {
             return
@@ -313,8 +321,13 @@ function assignTerminal(){
         }
     }
 }
+
 function buy(terminal,type,num){
     if(terminal.store[type]<num){
+        if (terminal.room.storage.store[type]){
+            terminal.room.centerTask(terminal.room.storage,terminal,type)
+            return
+        }
         switch(type){
             case "H":
             case "L":

@@ -36,6 +36,10 @@ interface RoomProperty{
     factory:number;
     power:number;
     upgrade:number;
+    extStore:number;
+}
+interface Game{
+    sell:{[type:ResourceConstant]: Order[]};
 }
 interface LabMemory{
 

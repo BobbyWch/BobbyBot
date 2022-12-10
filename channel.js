@@ -44,9 +44,28 @@ global.Channel={
     show:()=>{
         console.log(JSON.stringify(data))
     },
-    get:(room,type,num)=>{
+    get:(roomName,type,num)=>{
         const src=getRoom(type)
-        src.terminal.addSend(room.name,type,num)
+        if (src){
+            src.terminal.addSend(roomName,type,num)
+            return true
+        }else {
+            return false
+        }
+    },
+    /**
+     * @param terminal {StructureTerminal}
+     * @param type {ResourceConstant}
+     */
+    sell:(terminal,type,price)=>{
+        if (!Game.sell[type]){
+            Game.sell[type]=Game.market.getAllOrders({resourceType: type,type:ORDER_SELL})
+        }
+        const o=highestOf(Game.sell[type])
+        if (o&&o.price>=price){
+            terminal.deal(o.id,min(o.amount, terminal.store[type]))
+            o.remainingAmount-=min(o.amount, terminal.store[type])
+        }
     }
 }
 
@@ -89,4 +108,45 @@ function getState(type,num) {
     if (num > type.poor) {
         return MID
     }
+}
+/**
+ * @param orders {Order[]}
+ * @returns {Order}
+ */
+function highestOf(orders){
+    let h
+    for (const o of orders){
+        if (h){
+            if (o.price>h.price&&o.remainingAmount>0){
+                h=o
+            }
+        }else {
+            if (o.remainingAmount){
+                h=o
+            }
+        }
+    }
+    return h
+}
+/**
+ * @param orders {Order[]}
+ * @returns {Order}
+ */
+function lowestOf(orders){
+    let h
+    for (const o of orders){
+        if (h){
+            if (o.price<h.price&&o.remainingAmount>0){
+                h=o
+            }
+        }else {
+            if (o.remainingAmount){
+                h=o
+            }
+        }
+    }
+    return h
+}
+function min(a,b){
+    return a<b?a:b;
 }

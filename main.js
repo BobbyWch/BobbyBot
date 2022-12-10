@@ -9,6 +9,7 @@ require("./goals_mgr")
 const creepLogic = require("./logic")
 Channel.init()
 module.exports.loop = function () {
+    Game.sell={}
     runCreeps()
     runRooms()
     if (Game.time%3==0){

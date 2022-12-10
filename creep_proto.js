@@ -51,12 +51,11 @@ Creep.prototype.boosts=function (){
     }
     return this._bs
 }
+const canExtend=["target","role"]
 /**
- *
  * @param pre {number}
- * @param dels {Array}
  */
-Creep.prototype.autoRe=function(pre,dels) {
+Creep.prototype.autoRe=function(pre) {
     if (this.memory.re) {
         if (this.ticksToLive > 800) {
             delete this.memory.re
@@ -64,7 +63,7 @@ Creep.prototype.autoRe=function(pre,dels) {
     } else if (this.ticksToLive < this.body.length * 3 + pre) {
         const cloneM={}
         for (const key in this.memory){
-            if (!dels.includes(key)){
+            if (canExtend.includes(key)){
                 cloneM[key]=this.memory[key]
             }
         }

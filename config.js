@@ -5,7 +5,6 @@ const miner = "r$m";
 const carrier = "r$c";
 const spawner = "r$s";
 const cleaner = "r$cl";
-const getter = "r$gg";
 const outMiner = "r$ot";
 const claimer= "r$cm";
 const outBuilder="r$ob";
@@ -46,7 +45,7 @@ module.exports = {
             boost: false
         }
         r[upgrader] = {
-            parts: calc([[CARRY,4],[MOVE,5],[WORK,20]]),
+            parts: calc([[CARRY,3],[MOVE,15],[WORK,30]]),
             min: 0,
             boost: false
         }
@@ -58,10 +57,6 @@ module.exports = {
             parts: calc([[CARRY,21],[MOVE,13],[WORK,5]]),
             min: 0,
             boost: false
-        }
-        r[getter] = {
-            parts: [CARRY, CARRY, CARRY, CARRY, MOVE, MOVE, MOVE, MOVE],
-            min: 0
         }
         r[outMiner] = {
             parts: calc([[WORK,10],[CARRY,22],[MOVE,16]]),
