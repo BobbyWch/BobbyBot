@@ -59,7 +59,7 @@ global.Channel={
      */
     sell:(terminal,type,price)=>{
         if (!Game.sell[type]){
-            Game.sell[type]=Game.market.getAllOrders({resourceType: type,type:ORDER_SELL})
+            Game.sell[type]=Game.market.getAllOrders({resourceType: type,type:ORDER_BUY})
         }
         const o=highestOf(Game.sell[type])
         if (o&&o.price>=price){

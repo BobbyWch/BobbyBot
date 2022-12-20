@@ -30,6 +30,10 @@ interface RoomMemory{
     enemy:Id<AnyCreep>;
     prop:RoomProperty;
     spawns:Id<StructureSpawn>[];
+    tasks:SpawnTask[];
+}
+interface SpawnTask{
+
 }
 interface RoomProperty{
     pc:number;

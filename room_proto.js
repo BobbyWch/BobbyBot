@@ -94,7 +94,7 @@ Room.prototype.work=function() {
     if (property.pc) {
         this.pc().work()
     }
-    if (property.extStore && (!this.storage.effects || this.storage.effects[0].ticksRemaining < 70)) {
+    if (property.extStore && (!this.storage.effects.length || this.storage.effects[0].ticksRemaining < 70)) {
         this.pc().addTask(PWR_OPERATE_STORAGE, this.storage.id)
     }
 }
@@ -164,6 +164,12 @@ Room.prototype.callAfterBuilt=function (){
         const info=this.memory._build
         const s=new RoomPosition(info.x,info.y,this.name).lookFor(LOOK_STRUCTURES).find(o=>o.structureType==info.type)
         this.memory.spawns.push(s.id)
+    }else if (this.memory._build.type==STRUCTURE_WALL||this.memory._build.type==STRUCTURE_RAMPART){
+        const info=this.memory._build
+        const s=new RoomPosition(info.x,info.y,this.name).lookFor(LOOK_STRUCTURES).find(o=>o.structureType==info.type)
+        const c=this.find(FIND_MY_CREEPS).find(o=>o.memory.role==config.repairer)
+        c.memory._repair=s.id
+        c.memory.endTime=Game.time+100
     }
 }
 Room.prototype.addMission=function (name){
@@ -387,7 +393,7 @@ Room.prototype.pc=function (){
 }
 Room.prototype.addTask = function (mem,addToFirst) {
     if (addToFirst) {
-        this.memory.tasks.unshift({ _role: mem.role, _mem: mem });
+        this.memory.tasks.splice(0,0,{ _role: mem.role, _mem: mem });
     } else {
         this.memory.tasks.push({ _role: mem.role, _mem: mem });
     }

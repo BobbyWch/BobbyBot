@@ -218,6 +218,9 @@ module.exports= {
                         }
                     }
                 }
+                if(!tar){
+                    return
+                }
                 memory.endTime = Game.time + 500
                 memory._repair = tar.id
             }
@@ -250,11 +253,15 @@ module.exports= {
             }else {
                 tar=creep.room.flushSite()
             }
-            creep.build(tar)
-            if (!creep.pos.inRangeTo(tar, 2)) {
-                creep.moveTo(tar)
+            if (tar){
+                creep.build(tar)
+                if (!creep.pos.inRangeTo(tar, 2)) {
+                    creep.moveTo(tar)
+                }
+                creep.workIfEmpty()
+            }else{
+                creep.memory.role="r$r"
             }
-            creep.workIfEmpty()
         }
     },
     /**

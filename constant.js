@@ -8,6 +8,7 @@ const c={
     }
 }
 global.Constant=c
+require("./logger")
 require("./SuperMove")
 require("./tower")
 require("./group")

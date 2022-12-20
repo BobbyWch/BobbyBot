@@ -29,6 +29,9 @@ function finalize() {
         r.addBodyTask([WORK,CARRY,MOVE],{ role: config.upgrader }, false)
         r.memory.upgTime = Game.time + 40000
     }
+    if(Game.time%1400==0){
+        r.addTask({role:config.repairer})
+    }
 }
 if (!Memory.timer) {
     Memory.timer = {}

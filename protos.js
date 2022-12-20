@@ -44,10 +44,10 @@ global.api = {
     reactO(res1) {
         Goal.addGoal("react", { roomName: "W53S7", src1: res1, src2: "OH", count: 3000 })
     },
-    spawnMiner(){
-        const r=Game.rooms.W53S7
+    spawnMiner(r){
+        //const r=Game.rooms.W53S7
         for (const s of r.find(FIND_SOURCES)){
-            r.addTask({role:config.miner,target:s.id,name:"miner"+s.pos.x})
+            r.addTask({role:config.miner,target:s.id})
         }
     },
     setProper(name){
@@ -198,6 +198,9 @@ function assignStorage(){
         if (store[RESOURCE_OPS]>10000&&sT[RESOURCE_OPS]<10000){
             room.centerTask(this,terminal,RESOURCE_OPS)
         }
+        if(store["energy"]<100000&&Game.time%290==0){
+            Channel.get(this.room.name,"energy",60000)
+        }
         if (!factory){
             return
         }
@@ -239,11 +242,11 @@ function assignTerminal(){
             Channel.reg(this.room)
         }
         const room = this.room
-        if (this.store.getUsedCapacity(RESOURCE_ENERGY) <= 80000) {
+        if (this.store.getUsedCapacity(RESOURCE_ENERGY) <= 95000) {
             if (this.store.getFreeCapacity() && room.storage.store[RESOURCE_ENERGY] > 5000) {
                 room.centerTask(room.storage,this,RESOURCE_ENERGY)
             }
-        } else if (this.store.getUsedCapacity(RESOURCE_ENERGY) >= 100000) {
+        } else if (this.store.getUsedCapacity(RESOURCE_ENERGY) >= 120000) {
             room.centerTask(this,room.storage,RESOURCE_ENERGY)
         }
         if (this.store.getUsedCapacity(RESOURCE_POWER)) {
@@ -260,8 +263,9 @@ function assignTerminal(){
         if (Game.time % 9837 == 0 && this.store[RESOURCE_OPS]) {
             Channel.sell(this,RESOURCE_OPS,25)
         }
-        if (Game.time % 588 == 0 && this.room.storage.store.getUsedCapacity("energy") > 700000) {
-            Channel.sell(this,RESOURCE_ENERGY,12)
+        if (Game.time % 690 == 0 && this.room.storage.store.getUsedCapacity("energy") > 2000000) {
+            console.log("sell")
+            Channel.sell(this,RESOURCE_ENERGY,10)
         }
         if (Game.time % 10000 == 0 && this.store[RESOURCE_OXIDANT]) {
             const orders = Game.market.getAllOrders({resourceType: RESOURCE_OXIDANT, type: ORDER_BUY})
@@ -270,19 +274,15 @@ function assignTerminal(){
                 this.deal(highOrder.id, min(this.store.getUsedCapacity(RESOURCE_OXIDANT), highOrder.amount))
             }
         }
-        if (this.room.controller.level != 8 && Game.time % 82 == 0) {
-            const orders = Game.market.getAllOrders({resourceType: RESOURCE_ENERGY, type: ORDER_SELL})
-            let highOrder = lowestOf(orders)
-            if (highOrder && highOrder.price <= 3) {
-                Game.market.deal(highOrder.id, highOrder.amount, "W52S7")
-            }
-        }
         buy(this, "K", 15000)
         buy(this, "U", 15000)
         buy(this, "L", 15000)
         buy(this, "H", 15000)
         buy(this, "Z", 15000)
-        buy(this,RESOURCE_ENERGY,100000)
+        if(Game.time%100==0&&this.room.storage.store["energy"]<200000){
+            api.send("energy",50000)
+        }
+        //buy(this,RESOURCE_ENERGY,60000)
         //传送资源
         if (this.cooldown) {
             return
@@ -389,7 +389,7 @@ function assignPowerCreep(){
                 this.moveTo(this.room.storage)
             }
             return
-        }else if (this.ticksToLive<=600){
+        }else if (this.ticksToLive<=500){
             this.moveTo(this.room.powerSpawn)
             this.renew(this.room.powerSpawn)
             return
@@ -399,8 +399,9 @@ function assignPowerCreep(){
             const result=this.usePower(pwr,o)
             if (result===ERR_NOT_IN_RANGE){
                 this.moveTo(o)
-            }else if (result===ERR_TIRED){
-                break
+            //}else if (result===ERR_TIRED){
+              //  if(pwr==PWR_OPERATE_STORAGE)
+               // break
             }else {
                 delete this.memory.tasks[pwr]
                 return
@@ -423,44 +424,6 @@ const prices={
     Z: 9.5
 }
 /**
- *
- * @param terminal {StructureTerminal}
- * @param type {ResourceConstant}
- * @param minNum {number}
- * @param expect {number}
- */
-function keepRes(terminal,type,minNum,expect){
-    if (terminal.store[type]>=expect){
-        return
-    }
-    if (terminal.store[type]<min){
-        const orders=Game.market.getAllOrders({resourceType: type,type: ORDER_SELL})
-        const o=lowestOf(orders)
-        terminal.deal(o.id,min((minNum+expect)/2-terminal.store[type],o.amount))
-    }else {
-        if (terminal.memory[type]){
-            if (Game.market.getOrderById(terminal.memory[type]).remainingAmount===0){
-                terminal.memory[type]=null
-            }
-        }else {
-            for (const order of Game.market.orders) {
-                if (order.resourceType === type) {
-                    terminal.memory[type] = order.id
-                    return
-                }
-            }
-            Game.market.createOrder({
-                type: ORDER_BUY,
-                resourceType: type,
-                price: prices[type],
-                totalAmount: expect - terminal.store[type],
-                roomName: terminal.room.name
-            })
-        }
-    }
-}
-/**
- *
  * @param orders {Order[]}
  * @returns {Order}
  */

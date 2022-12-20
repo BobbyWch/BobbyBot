@@ -40,7 +40,7 @@ module.exports = {
             min: 0
         }
         r[repairer] = {
-            parts: calc([[CARRY,14],[MOVE,12],[WORK,10]]),
+            parts: calc([[CARRY,20],[MOVE,15],[WORK,10]]),
             min: 0,
             boost: false
         }
