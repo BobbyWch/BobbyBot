@@ -18,6 +18,15 @@ Structure.prototype.findMost=function () {
     }
     return type
 }
+global.myroom=function (){
+    let s=""
+    for (const r of Object.values(Game.rooms)){
+        if (r.controller&&r.controller.my){
+            s+=Logger.roomLink(r.name)
+        }
+    }
+    return s
+}
 global.api = {
     buy(a, price, num) {
         Game.market.createOrder({
@@ -255,7 +264,7 @@ function assignTerminal(){
             if (room.storage.store.getUsedCapacity(RESOURCE_POWER) <= 3000000) {
                 const orders = Game.market.getAllOrders({resourceType: RESOURCE_POWER, type: ORDER_SELL})
                 let low = lowestOf(orders)
-                if (low && low.price <= 141 || room.storage.store.getUsedCapacity(RESOURCE_POWER) <= 10000) {
+                if (low && low.price <= 141 || room.storage.store.getUsedCapacity(RESOURCE_POWER) <= 5000) {
                     this.deal(low.id, min(low.amount, 50000))
                 }
             }
@@ -263,8 +272,7 @@ function assignTerminal(){
         if (Game.time % 9837 == 0 && this.store[RESOURCE_OPS]) {
             Channel.sell(this,RESOURCE_OPS,25)
         }
-        if (Game.time % 690 == 0 && this.room.storage.store.getUsedCapacity("energy") > 2000000) {
-            console.log("sell")
+        if (Game.time % 1290 == 0 && this.room.storage.store.getUsedCapacity("energy") > 2000000) {
             Channel.sell(this,RESOURCE_ENERGY,10)
         }
         if (Game.time % 10000 == 0 && this.store[RESOURCE_OXIDANT]) {
@@ -274,15 +282,15 @@ function assignTerminal(){
                 this.deal(highOrder.id, min(this.store.getUsedCapacity(RESOURCE_OXIDANT), highOrder.amount))
             }
         }
-        buy(this, "K", 15000)
-        buy(this, "U", 15000)
-        buy(this, "L", 15000)
-        buy(this, "H", 15000)
-        buy(this, "Z", 15000)
-        if(Game.time%100==0&&this.room.storage.store["energy"]<200000){
-            api.send("energy",50000)
+        buy(this, "K", 10000)
+        buy(this, "U", 10000)
+        buy(this, "L", 10000)
+        buy(this, "H", 10000)
+        buy(this, "Z", 10000)
+        buy(this, "O", 10000)
+        if(Game.time%100==0&&this.room.storage.store["energy"]<300000){
+            Channel.get(this.room.name,RESOURCE_ENERGY,50000)
         }
-        //buy(this,RESOURCE_ENERGY,60000)
         //传送资源
         if (this.cooldown) {
             return
@@ -327,6 +335,9 @@ function buy(terminal,type,num){
         if (terminal.room.storage.store[type]){
             terminal.room.centerTask(terminal.room.storage,terminal,type)
             return
+        }
+        if (Channel.get(terminal.name,type,num)){
+            return;
         }
         switch(type){
             case "H":
@@ -373,19 +384,28 @@ function assignPowerCreep(){
     }
     PowerCreep.prototype.work=function (){
         if(!this.hits){
-            this.spawn(Game.rooms.W53S7.powerSpawn)
+            this.spawn(Game.rooms[this.memory.parent].powerSpawn)
             return
         }
+        // if (this.room.name!=this.memory.parent){
+        //     this.moveTo(Game.rooms[this.memory.parent].powerSpawn)
+        //     return;
+        // }
         if (this.hits<this.hitsMax){
             this.room.heal(this)
+        }
+        if (!this.room.controller.isPowerEnabled){
+            if (this.enableRoom(this.room.controller)==ERR_NOT_IN_RANGE){
+                this.moveTo(this.room.controller)
+            }
         }
         if (this.store.getUsedCapacity(RESOURCE_OPS)<150){
             if (this.withdraw(this.room.storage,RESOURCE_OPS,200)===ERR_NOT_IN_RANGE){
                 this.moveTo(this.room.storage)
             }
             return;
-        } else if (this.store.getFreeCapacity()<=300){
-            if (this.transfer(this.room.storage,RESOURCE_OPS,1000)===ERR_NOT_IN_RANGE){
+        } else if (this.store.getFreeCapacity()<=200){
+            if (this.transfer(this.room.storage,RESOURCE_OPS,this.store[RESOURCE_OPS]-220)===ERR_NOT_IN_RANGE){
                 this.moveTo(this.room.storage)
             }
             return
@@ -394,14 +414,16 @@ function assignPowerCreep(){
             this.renew(this.room.powerSpawn)
             return
         }
+        if (this.room.memory.prop.opExt){
+            if (this.room.energyAvailable<this.room.energyCapacityAvailable*0.6){
+                this.addTask(PWR_OPERATE_EXTENSION,this.room.storage.id)
+            }
+        }
         for (const pwr in this.memory.tasks){
             const o=Game.getObjectById(this.memory.tasks[pwr])
             const result=this.usePower(pwr,o)
             if (result===ERR_NOT_IN_RANGE){
                 this.moveTo(o)
-            //}else if (result===ERR_TIRED){
-              //  if(pwr==PWR_OPERATE_STORAGE)
-               // break
             }else {
                 delete this.memory.tasks[pwr]
                 return

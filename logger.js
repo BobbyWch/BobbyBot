@@ -8,22 +8,19 @@ global.Logger={
  * 在绘制控制台信息时使用的颜色
  */
 global.Colors = {
-    red: '#ef9a9a',
-    green: '#6b9955',
-    yellow: '#c5c599',
-    blue: '#8dc5e3'
+    red: '#e04545',
+    green: '#6dce30',
+    yellow: '#ffff00',
+    blue: '#20adfa'
 }
 /**
  * 给指定文本添加颜色
  * 
  * @param content 要添加颜色的文本
  * @param colorName 要添加的颜色常量字符串
- * @param bolder 是否加粗
  */
-function colorful(content, colorName, bolder) {
-    const colorStyle = colorName ? `color: colorName; ` : ''
-    const bolderStyle = bolder ? 'font-weight: bolder;' : ''
-    return `<text style="${colorStyle}${bolderStyle}">${content}</text>`
+function colorful(content, colorName) {
+    return `<text style="color: ${colorName}; ">${content}</text>`
 }
 /**
  * 给房间内添加跳转链接

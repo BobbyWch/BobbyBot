@@ -1,20 +1,3 @@
-Creep.prototype.withdrawFromCon = function () {
-    if (!this.memory.target) {
-        this.memory.target = getContainer().id;
-    }
-    const tar = Game.getObjectById(this.memory.target);
-    for (const v in tar.store) {
-        const result = this.withdraw(tar, v);
-        if (result == ERR_NOT_IN_RANGE) {
-            this.moveTo(tar);
-        } else if (result == OK) {
-            this.memory.working = false;
-            this.memory.target = null;
-        }
-        break;
-    }
-}
-
 Creep.prototype.withdrawFromStore = function () {
     if (this.room.storage.store.getUsedCapacity(RESOURCE_ENERGY)) {
         const result = this.withdraw(this.room.storage, RESOURCE_ENERGY);
@@ -132,7 +115,7 @@ Creep.prototype.runCarry = function () {
         if (id) {
             memory.task = id;
             task = allTasks[id];
-            task.runner=this.id;
+            task.runner=this.name;
             if (!task.num||task.num>this.store.getCapacity()){
                 memory.num=this.store.getCapacity()
             }else {
@@ -161,7 +144,7 @@ Creep.prototype.runCarry = function () {
             }
         } else {
             if (this.onlyHas(task.res)) {
-                if (this.store.getFreeCapacity()) {
+                if (this.store[task.res]<memory.num) {
                     let target = Game.getObjectById(memory.target)
                     if (!target) {
                         target = this.room.findRes(task.res, memory.num)
@@ -325,13 +308,17 @@ Creep.prototype.forceMove = function (target) {
     this.moveTo(target)
     return false
 }
+//and towers
 Creep.prototype.fillExt=function (){
+    if (this.room.energyAvailable==this.room.energyCapacityAvailable){
+        return;
+    }
     let tar
     if (this.memory.target) {
         tar = Game.getObjectById(this.memory.target)
     } else {
-        const exts = this.room.find(FIND_MY_STRUCTURES).filter(e => (e.structureType === STRUCTURE_SPAWN
-            || e.structureType === STRUCTURE_EXTENSION) && e.store.getFreeCapacity(RESOURCE_ENERGY))
+        const exts = this.room.find(FIND_MY_STRUCTURES).filter(e => (e.structureType == STRUCTURE_SPAWN
+            || e.structureType == STRUCTURE_EXTENSION||e.structureType==STRUCTURE_TOWER) && e.store.getFreeCapacity(RESOURCE_ENERGY))
         if (exts.length) {
             tar=this.pos.findClosestByRange(exts)
             this.memory.target = tar.id
@@ -342,24 +329,9 @@ Creep.prototype.fillExt=function (){
     if (tar) {
         if (this.transfer(tar, RESOURCE_ENERGY) == ERR_NOT_IN_RANGE) {
             this.moveTo(tar);
-            // h.moveByPath(srcInfo[h.memory.target].back_path);
         } else if (!tar.store.getFreeCapacity(RESOURCE_ENERGY)) {
             this.memory.target = null
         }
         this.workIfEmpty();
     }
-}
-function getContainer() {
-    return Game.rooms.W53S7.storage
-    let containers = []
-    containers[0] = Game.getObjectById("62f9fb2d632e9c1407261729");
-    containers[1] = Game.getObjectById("62fa02fd89db983b8dca1784");
-    // containers[2]= Game.getObjectById("62f3ceb6d01203d784b3e704");
-    let temp = containers[0]
-    for (const c of containers) {
-        if (c.store.getUsedCapacity() > temp.store.getUsedCapacity()) {
-            temp = c
-        }
-    }
-    return ;
 }

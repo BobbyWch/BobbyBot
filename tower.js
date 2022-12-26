@@ -50,6 +50,7 @@ global.Tower = {
                 buff[room.name].push(t.id)
             }
         }
+        if (!towers.length) return;
         let i = 0
         for (const struct of room.find(FIND_STRUCTURES)) {
             if (struct.structureType == STRUCTURE_ROAD) {
@@ -74,5 +75,8 @@ global.Tower = {
                 break
             }
         }
+    },
+    addTower(room,tower){
+        buff[room.name].push(tower.id)
     }
 }

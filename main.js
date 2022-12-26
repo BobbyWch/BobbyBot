@@ -1,11 +1,8 @@
 console.log("Global reset")
 require("./constant")
-let r = Game.rooms.W53S7
 global.roles = {}
-const config = require("./config")
-config.init(roles)
+global.config = require("./config")
 require("./protos")
-require("./goals_mgr")
 const creepLogic = require("./logic")
 Channel.init()
 module.exports.loop = function () {
@@ -15,33 +12,8 @@ module.exports.loop = function () {
     if (Game.time%3==0){
         countCreep()
     }
-    global.Goal.run()
-    finalize()
-    runTimer()
-    if (Game.cpu.bucket === 10000) {
+    if (Game.cpu.bucket == 10000) {
         Game.cpu.generatePixel();
-    }
-}
-
-function finalize() {
-    const r=Game.rooms.W53S7
-    if (r.memory.upgTime < Game.time) {
-        r.addBodyTask([WORK,CARRY,MOVE],{ role: config.upgrader }, false)
-        r.memory.upgTime = Game.time + 40000
-    }
-    if(Game.time%1400==0){
-        r.addTask({role:config.repairer})
-    }
-}
-if (!Memory.timer) {
-    Memory.timer = {}
-}
-function runTimer() {
-    for (const t in Memory.timer) {
-        if (Game.time >= t) {
-            r.addTask(Memory.timer[t])
-            delete Memory.timer[t]
-        }
     }
 }
 function runRooms(){
@@ -87,8 +59,10 @@ function countCreep(){
     }
     for (const c in Game.creeps){
         creep=Game.creeps[c]
-        if (creep.spawning||creep.ticksToLive >= 80 || creep.memory.role === config.miner) {
-            counter[creep.room.name][creep.memory.role]++
+        if (creep.spawning||creep.ticksToLive >= 80 || creep.memory.role === config.harvester) {
+            if(counter[creep.room.name]){
+                counter[creep.room.name][creep.memory.role]++
+            }
         }
     }
     for (const n in counter){
@@ -101,24 +75,26 @@ function countCreep(){
     }
 }
 const funcs={}
-funcs[config.miner]=creepLogic.miner
+funcs[config.harvester]=creepLogic.harvester
 funcs[config.spawner]=creepLogic.spawner
-funcs[config.upgrader]=creepLogic.upgrade
 funcs[config.repairer]=creepLogic.repairer
 funcs[config.builder]=creepLogic.builder
 funcs[config.carrier]=(creep)=>creep.runCarry()
 funcs[config.cleaner]=creepLogic.manager
 funcs[config.upgrader]=creepLogic.upgrader
-funcs["goal"]=(creep)=>{
-    Goal.callAddCreep(creep, creep.memory.goal_id);
-    delete creep.memory.role;
-}
-function runCreeps(){
-    let creeps=Game.creeps
+funcs[config.transfer]=creepLogic.remoteTransfer
+funcs[config.claimer]=creepLogic.claimer
+funcs[config.starter]=creepLogic.starter
+funcs[config.worker]=creepLogic.worker
+funcs[config.remote]=creepLogic.remote
+funcs[config.attacker]=creepLogic.attacker
+funcs[config.miner]=creepLogic.miner
+function runCreeps() {
+    let creeps = Game.creeps
     let creep
-    for (const n in creeps){
-        creep=creeps[n]
-        if (creep.spawning){
+    for (const n in creeps) {
+        creep = creeps[n]
+        if (creep.spawning) {
             continue
         }
         funcs[creep.memory.role](creep)

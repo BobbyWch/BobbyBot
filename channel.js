@@ -53,9 +53,21 @@ global.Channel={
             return false
         }
     },
+    send:(roomName,type,num)=>{
+        let room
+        for (const rn in data){
+            room=Game.rooms[rn]
+            if (room.getStore()[type]>=num){
+                room.terminal.addSend(roomName,type,num)
+                return true
+            }
+        }
+        return false
+    },
     /**
      * @param terminal {StructureTerminal}
      * @param type {ResourceConstant}
+     * @param price {number}
      */
     sell:(terminal,type,price)=>{
         if (!Game.sell[type]){

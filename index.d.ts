@@ -3,9 +3,11 @@ interface Memory{
     sources: { [id: string]: SourceMemory };
     factorys: { [id: string]: FactoryMemory };
     terminals: { [id: string]: TerminalMemory };
-    labs:{[id: string]: LabMemory}
+    labs:{[id: string]: LabMemory};
+    creepConfigs;
 }
 interface CreepMemory{
+    belong: string;
     role: string;
     task: StructureConstant;
     working: boolean;
@@ -31,6 +33,17 @@ interface RoomMemory{
     prop:RoomProperty;
     spawns:Id<StructureSpawn>[];
     tasks:SpawnTask[];
+    labs:LabMemory;
+}
+
+interface LabMemory{
+    main1: Id<StructureLab>;
+    main2: Id<StructureLab>;
+    others: Id<StructureLab>[];
+    state: "prepare"|"react"|"collect";
+    src1: ResourceConstant;
+    src2: ResourceConstant;
+    cooldown:number;
 }
 interface SpawnTask{
 
@@ -41,12 +54,11 @@ interface RoomProperty{
     power:number;
     upgrade:number;
     extStore:number;
+    opExt:number;
+    regen:number;
 }
 interface Game{
     sell:{[type:ResourceConstant]: Order[]};
-}
-interface LabMemory{
-
 }
 interface TowerMemory{}
 interface SourceMemory{}
