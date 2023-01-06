@@ -20,7 +20,6 @@ Creep.prototype.withdrawFromStore = function () {
     }
 }
 /**
- *
  * @returns {Array}
  */
 Creep.prototype.boosts=function (){
@@ -33,6 +32,31 @@ Creep.prototype.boosts=function (){
         }
     }
     return this._bs
+}
+const boostMap={
+    XGHO2:TOUGH,
+    XZHO2:MOVE,
+    XKHO2:RANGED_ATTACK,
+    XZH2O:WORK,
+    XLHO2:HEAL
+}
+Creep.prototype.boostInfo=function (){
+    if (!this.buff.bstInfo){
+        const body={}
+        for (const b of this.body){
+            if (body[b.type]){
+                body[b.type]++
+            }else {
+                body[b.type]=1
+            }
+        }
+        const info={}
+        for (const res of this.memory.needBoost){
+            info[res]=body[boostMap[res]]*30
+        }
+        this.buff.bstInfo=info
+    }
+    return this.buff.bstInfo
 }
 const canExtend=["target","role"]
 /**
@@ -82,15 +106,23 @@ Creep.prototype.getFrom=function (target,type) {
             break
         }
     }
-    if (this.withdraw(target, type) == ERR_NOT_IN_RANGE) {
+    const result=this.withdraw(target, type)
+    if (result == ERR_NOT_IN_RANGE) {
         this.moveTo(target)
+    }else if (result==OK){
+        return true
     }
+    return false
 }
 function min(a,b){
     return a<b?a:b;
 }
 const Carry=global.Constant.carryTaskType
 Creep.prototype.runCarry = function () {
+    if (this.hits<this.hitsMax) {
+        this.room.heal(this)
+    }
+    this.greet("ikun")
     const memory=this.memory
     /**@type{CarryTask}*/
     let task = this.room.memory.carryTasks[memory.task];
@@ -127,8 +159,6 @@ Creep.prototype.runCarry = function () {
         } else {
             if (this.store.getUsedCapacity()){
                 this.transferAny(this.room.storage)
-            }else {
-                this.say("😴")
             }
             return;
         }
@@ -155,7 +185,9 @@ Creep.prototype.runCarry = function () {
                             return;
                         }
                     }
-                    this.getFrom(target, task.res)
+                    if (this.getFrom(target, task.res)){
+                        memory.ready = true
+                    }
                     return;
                 } else {
                     memory.ready = true
@@ -171,7 +203,9 @@ Creep.prototype.runCarry = function () {
                         return;
                     }
                 }
-                this.getFrom(target, task.res)
+                if (this.getFrom(target, task.res)){
+                    memory.ready = true
+                }
                 return;
             } else {
                 this.transferAny(this.room.storage)
@@ -332,6 +366,64 @@ Creep.prototype.fillExt=function (){
         } else if (!tar.store.getFreeCapacity(RESOURCE_ENERGY)) {
             this.memory.target = null
         }
-        this.workIfEmpty();
+        this.workIfEmpty()
     }
+}
+const sayings={
+    sherlock: {
+        content:["相爱总能和好/好马不吃回头草", "即兴的誓/烂尾的诗", "埋在心里吧/每个夜晚都思念的人","圆有公式/但缘没有","药是苦的/你的笑是甜的",
+        "手是冷的/你的怀里是暖的","你知道我的星座吗/为你的量身定做","不要抱怨/抱我","不响丸辣！","我可是深情一哥","I am/Sherlock/A dog"]
+    },
+    ikun:{
+        content:["你干嘛~~/哎呦~~~","我喜欢唱、跳、/Rap、篮球","Ctrl!","你食不食油饼","你有没有树枝","香精煎鱼食不食","香翅捞饭食不食"]
+    },
+    frog:{
+        content:["I have/big ass","I am frog","把你的ass扣成/小天的形状/开不开心？"]
+    },
+    neo:{
+        content:["啊哈哈哈~~/鸡汤来喽","这孩子跟小菜似的","哼~","shut up","鸡你太美","哈哈"]
+    }
+}
+initSay()
+function initSay(){
+    let ss,content
+    for (const key in sayings){
+        ss=[]
+        content=sayings[key].content
+        for (const oneSay of content){
+            ss.push(count(oneSay)+1)
+        }
+        sayings[key].sizes=ss
+    }
+}
+function count(str){
+    let sum = 0;
+    for (const c of str) {
+        sum += +(c == "/");
+    }
+    return sum;
+}
+
+Creep.prototype.greet=function (role) {
+    let mem = this.memory.say
+    if (!mem) {
+        mem = this.memory.say = {}
+    }
+    if (mem.child == sayings[role].sizes[mem.index]) {
+        if (Game.time%6){
+            return
+        }
+        mem.child = 0
+        let i=util.nextRand(sayings[role].content.length)
+        if (i==mem.index){
+            if (i){
+                i--
+            }else {
+                i++
+            }
+        }
+        mem.index=i
+    }
+    this._say = sayings[role].content[mem.index].split("/")[mem.child++]
+    this.say(this._say,true)
 }

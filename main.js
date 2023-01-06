@@ -1,76 +1,62 @@
 console.log("Global reset")
 require("./constant")
-global.roles = {}
-global.config = require("./config")
-require("./protos")
 const creepLogic = require("./logic")
 Channel.init()
+let _cache
 module.exports.loop = function () {
+    if (_cache) {
+        delete global.Memory
+        global.Memory = _cache
+    } else {
+        _cache = Memory
+    }
     Game.sell={}
-    runCreeps()
-    runRooms()
     if (Game.time%3==0){
         countCreep()
     }
+    runRooms()
+    runCreeps()
     if (Game.cpu.bucket == 10000) {
         Game.cpu.generatePixel();
     }
+    RawMemory._parsed = global.Memory
 }
+
 function runRooms(){
-    let rooms=Game.rooms
-    let r
-    for (const n in rooms){
+    let rooms=Game.rooms,r,n
+    for (n in rooms){
         r=Game.rooms[n]
         if (r.controller&&r.controller.my){
-            if (Game.time%2){
-                const hostiles = r.find(FIND_HOSTILE_CREEPS)
-                if (hostiles.length){
-                    let closest
-                    for (const creep of hostiles) {
-                        if (closest) {
-                            if (creep.pos.getRangeTo(25, 25) < closest.pos.getRangeTo(25, 25)) {
-                                closest = creep;
-                            }
-                        } else {
-                            closest = creep;
-                        }
-                    }
-                    if (closest) {
-                        r.memory.enemy = closest.id;
-                    }
-                }
-            }
             r.work()
         }
     }
 }
 function countCreep(){
-    let creep
-    const counter={}
-    for (let r in Game.rooms){
-        r=Game.rooms[r]
+    let creep,c,r,role
+    const counter={},rooms=Game.rooms,creeps=Game.creeps
+    for (r in rooms){
+        r=rooms[r]
         if (r.controller&&r.controller.my){
-            const c={}
-            for (const role in global.roles){
+            c={}
+            for (role in global.roles){
                 c[role]=0
             }
             counter[r.name]=c
         }
     }
-    for (const c in Game.creeps){
-        creep=Game.creeps[c]
-        if (creep.spawning||creep.ticksToLive >= 80 || creep.memory.role === config.harvester) {
-            if(counter[creep.room.name]){
-                counter[creep.room.name][creep.memory.role]++
+    for (c in creeps){
+        creep=creeps[c]
+        if (creep.spawning||creep.ticksToLive >= 3.2*creep.body.length) {
+            if(counter[creep.memory.belong]){
+                counter[creep.memory.belong][creep.memory.role]++
             }
         }
     }
-    for (const n in counter){
-        Game.rooms[n].doSpawn(counter[n])
-    }
-    for (const i in Memory.creeps) {
-        if (!Game.creeps[i]) {
-            delete Memory.creeps[i];
+    doSpawn(counter)
+    for (c in Memory.creeps) {
+        if (!creeps[c]) {
+            delete Memory.creeps[c]
+            delete Buff[c]
         }
     }
 }
@@ -90,13 +76,107 @@ funcs[config.remote]=creepLogic.remote
 funcs[config.attacker]=creepLogic.attacker
 funcs[config.miner]=creepLogic.miner
 function runCreeps() {
-    let creeps = Game.creeps
-    let creep
-    for (const n in creeps) {
+    let creep,n,creeps = Game.creeps
+    const cs=[]
+    for (n in creeps) {
         creep = creeps[n]
+        if (creep.memory.needBoost){
+            if(creep.room.prepareBoost(creep)){
+                creep.room.boost(creep)
+            }
+        }
         if (creep.spawning) {
             continue
         }
-        funcs[creep.memory.role](creep)
+        if (creep.memory.role){
+            if (creep.memory.role==config.carrier){
+                cs.push(creep)
+            }else {
+                funcs[creep.memory.role](creep)
+            }
+        }
+    }
+    //carrier后置执行
+    n=funcs[config.carrier]
+    for (creep of cs){
+        n(creep)
     }
 }
+
+const spawnIgnore=[config.harvester]
+const rand=Math.random
+function getBody(role,level){
+    if (global.roles[role].adapt){
+        return global.roles[role].adapt(level)
+    }else {
+        return global.roles[role].parts
+    }
+}
+function doSpawn(counts){
+    let sn,spawn,counter,room,name,cConfig,result,cost
+    const sps=Game.spawns
+    for (sn in sps){
+        spawn=sps[sn]
+        if (!spawn.spawning) {
+            room=spawn.room
+            counter=counts[room.name]
+            if (room.memory.tasks.length) {
+                const newCreep = room.memory.tasks[0];
+                if (newCreep._mem.name){
+                    name=newCreep._mem.name
+                    delete newCreep._mem.name
+                }else {
+                    name=`c${Game.time%10000}_${0|Math.random()*1000}`
+                }
+                if (newCreep._role && global.roles[newCreep._role]) {
+                    cost=getCost(getBody(newCreep._role,room.controller.level))
+                    if (room.energyAvailable >= cost) {
+                        newCreep._mem.belong=room.name
+                        if(spawn.spawnCreep(getBody(newCreep._role,room.controller.level), name, {memory: newCreep._mem})==OK){
+                            room.memory.tasks.shift()
+                            room.energyAvailable-=cost
+                        }
+                        counter[newCreep._role]++
+                    }
+                } else {
+                    cost=getCost(newCreep._body)
+                    if (room.energyAvailable >= cost) {
+                        newCreep._mem.belong=room.name
+                        if(spawn.spawnCreep(newCreep._body, name, {memory: newCreep._mem})==OK){
+                            room.memory.tasks.shift()
+                            room.energyAvailable-=cost
+                        }
+                    }
+                }
+            } else {
+                cConfig=Memory.creepConfigs[room.name]
+                for (const index in global.roles) {
+                    if (spawnIgnore.includes(index)) {
+                        continue;
+                    }
+                    cost=getCost(getBody(index,room.controller.level))
+                    if (counter[index] < CreepApi.numOf(index,room.name) && room.energyAvailable >= cost) {
+                        result=spawn.spawnCreep(getBody(index,room.controller.level), `c${Game.time%10000}_${0|rand()*1000}`, {
+                            memory: {
+                                role: index,
+                                belong: room.name
+                            }
+                        })
+                        if (result==OK){
+                            room.energyAvailable-=cost
+                            counter[index]++
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+const Buff={}
+Object.defineProperty(Creep.prototype,"buff",{
+    get: function() {
+        return Buff[this.name] =Buff[this.name] || {};
+    },
+    set: function(value) {Buff[this.name] = value;}
+})

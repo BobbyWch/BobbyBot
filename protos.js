@@ -1,7 +1,10 @@
-const config = require("./config");
 initMem()
 assignMem()
-
+assignStorage()
+assignFactory()
+assignTerminal()
+assignPowerCreep()
+const min=util.min
 Structure.prototype.getS=function (type,num){
     this.room.addCarryTask(this,1,type,num)
 }
@@ -18,72 +21,9 @@ Structure.prototype.findMost=function () {
     }
     return type
 }
-global.myroom=function (){
-    let s=""
-    for (const r of Object.values(Game.rooms)){
-        if (r.controller&&r.controller.my){
-            s+=Logger.roomLink(r.name)
-        }
-    }
-    return s
-}
-global.api = {
-    buy(a, price, num) {
-        Game.market.createOrder({
-            type: ORDER_BUY,
-            resourceType: a,
-            price: price,
-            totalAmount: num,
-            roomName: "W53S7"
-        })
-    },
-    attack() {
-        const r=Game.rooms.W53S7
-        Goal.addGoal("attack", { from: "W53S7", to: Game.flags.attack.pos.roomName })
-        r.pc().addTask(PWR_OPERATE_EXTENSION,r.storage.id)
-    },
-    freeLabs() {
-        for (const lab in Memory.labs) {
-            delete Memory.labs[lab].boosting
-        }
-    },
-    react(res1, res2) {
-        Goal.addGoal("react", { roomName: "W53S7", src1: res1, src2: res2, count: 3000 })
-    },
-    reactO(res1) {
-        Goal.addGoal("react", { roomName: "W53S7", src1: res1, src2: "OH", count: 3000 })
-    },
-    spawnMiner(r){
-        //const r=Game.rooms.W53S7
-        for (const s of r.find(FIND_SOURCES)){
-            r.addTask({role:config.miner,target:s.id})
-        }
-    },
-    setProper(name){
-        const prop=Game.rooms.W53S7.memory.prop
-        if (prop[name]){
-            delete prop[name]
-        }else {
-            prop[name]=1
-        }
-    },
-    setAim(res){
-        const r=Game.rooms.W53S7.factory
-        r.memory.aim=res
-    },
-    send(res,mount){
-        Game.rooms.W53S7.terminal.send(res,mount,"W52S7")
-    }
-}
-assignStorage()
-assignFactory()
-assignTerminal()
-assignLab()
-assignPowerCreep()
-require("./creep_proto")
-require("./room_proto")
+
 function initMem(){
-    const keys=["towers","sources","factorys","terminals","labs"]
+    const keys=["sources","factorys","terminals"]
     for (const k of keys){
         if (!Memory[k]){
             Memory[k]={}
@@ -127,32 +67,6 @@ function assignMem(){
         },
         set: function(value) {Memory.labs[this.id] = value;}
     });
-}
-const factoryInfo={}
-factoryInfo[RESOURCE_CONCENTRATE]={
-    level1:pack(RESOURCE_ENERGY,300,RESOURCE_CONDENSATE,30,RESOURCE_HYDROGEN,1000),
-    level2:pack(RESOURCE_REDUCTANT,54),
-    power:true
-}
-factoryInfo[RESOURCE_ALLOY]={
-    level1:pack(RESOURCE_ENERGY,1000,RESOURCE_ZYNTHIUM,500,RESOURCE_METAL,100),
-    level2:pack(RESOURCE_ZYNTHIUM_BAR,100),
-}
-factoryInfo[RESOURCE_OXIDANT]={
-    level1:pack(RESOURCE_ENERGY,300,RESOURCE_OXYGEN,800)
-}
-function pack(){
-    let last=null
-    const r={}
-    for (const a of arguments){
-        if (last){
-            r[last]=a
-            last=null
-        }else {
-            last=a
-        }
-    }
-    return r
 }
 function assignFactory(){
     StructureFactory.prototype.work=function (){
@@ -247,7 +161,7 @@ function assignTerminal(){
         this.memory.sends.push({target: roomName,type: type,num:num})
     }
     StructureTerminal.prototype.work=function () {
-        if (Game.time%70==0){
+        if (Game.time%203==0){
             Channel.reg(this.room)
         }
         const room = this.room
@@ -261,7 +175,7 @@ function assignTerminal(){
         if (this.store.getUsedCapacity(RESOURCE_POWER)) {
             room.centerTask(this,room.storage,RESOURCE_POWER)
         } else if (Game.time % 1598 === 0) {
-            if (room.storage.store.getUsedCapacity(RESOURCE_POWER) <= 3000000) {
+            if (room.controller.level==8&&room.storage.store.getUsedCapacity(RESOURCE_POWER) <= 3000000) {
                 const orders = Game.market.getAllOrders({resourceType: RESOURCE_POWER, type: ORDER_SELL})
                 let low = lowestOf(orders)
                 if (low && low.price <= 141 || room.storage.store.getUsedCapacity(RESOURCE_POWER) <= 5000) {
@@ -272,8 +186,8 @@ function assignTerminal(){
         if (Game.time % 9837 == 0 && this.store[RESOURCE_OPS]) {
             Channel.sell(this,RESOURCE_OPS,25)
         }
-        if (Game.time % 1290 == 0 && this.room.storage.store.getUsedCapacity("energy") > 2000000) {
-            Channel.sell(this,RESOURCE_ENERGY,10)
+        if (Game.time % 5290 == 0 && this.room.storage.store["energy"] > 2000000) {
+            Channel.sell(this,RESOURCE_ENERGY,12)
         }
         if (Game.time % 10000 == 0 && this.store[RESOURCE_OXIDANT]) {
             const orders = Game.market.getAllOrders({resourceType: RESOURCE_OXIDANT, type: ORDER_BUY})
@@ -282,14 +196,17 @@ function assignTerminal(){
                 this.deal(highOrder.id, min(this.store.getUsedCapacity(RESOURCE_OXIDANT), highOrder.amount))
             }
         }
-        buy(this, "K", 10000)
+        if (Game.time%103==0) {
+            buy(this, "K", 10000)
         buy(this, "U", 10000)
         buy(this, "L", 10000)
         buy(this, "H", 10000)
         buy(this, "Z", 10000)
         buy(this, "O", 10000)
-        if(Game.time%100==0&&this.room.storage.store["energy"]<300000){
+        buy(this, "X", 10000)
+        if(this.room.storage.store["energy"]<300000){
             Channel.get(this.room.name,RESOURCE_ENERGY,50000)
+        }
         }
         //传送资源
         if (this.cooldown) {
@@ -328,52 +245,33 @@ function assignTerminal(){
             }
         }
     }
-}
+    StructureTerminal.prototype.addResWatch=function (watch){
 
-function buy(terminal,type,num){
-    if(terminal.store[type]<num){
-        if (terminal.room.storage.store[type]){
-            terminal.room.centerTask(terminal.room.storage,terminal,type)
-            return
-        }
-        if (Channel.get(terminal.name,type,num)){
-            return;
-        }
-        switch(type){
-            case "H":
-            case "L":
-            case "Z":
-                if(Game.time%200==0){
-                    const orders=Game.market.getAllOrders({resourceType: type,type:ORDER_SELL})
-                    if(orders.length){
-                        const o=lowestOf(orders)
-                        if(o.price<20){
-                            terminal.deal(o.id,min(o.remainingAmount,5000))
-                        }
-                    }
-                }
-                break
-            case "U":
-            case "K":
-                if(Game.time%4000==0){
-                    Game.market.createOrder({
-                        type: ORDER_BUY,
-                        resourceType: type,
-                        price: 5,
-                        totalAmount: 3000,
-                        roomName: terminal.room.name
-                    })
-                }
-        }
+    }
+    StructureTerminal.prototype.hasResWatch=function (watch){
+
+    }
+    StructureTerminal.prototype.removeResWatch=function (watch){
+
     }
 }
-function assignLab(){
-    StructureLab.prototype.clear=function () {
-        if (this.mineralType&&this.store.getUsedCapacity(this.mineralType)) {
-            this.takeS(this.mineralType,this.store.getUsedCapacity(this.mineralType))
-            return true
+
+function buy(terminal,type,num) {
+    if (num-terminal.store[type]>2000) {
+        if (terminal.room.storage.store[type]) {
+            terminal.room.centerTask(terminal.room.storage, terminal, type)
+            return
         }
-        return false
+        if (Channel.get(terminal.room.name, type, num)) {
+            return;
+        }
+            const orders = Game.market.getAllOrders({resourceType: type, type: ORDER_SELL})
+            if (orders.length) {
+                const o = lowestOf(orders)
+                if (o&&o.price < 20) {
+                    terminal.deal(o.id, min(o.remainingAmount, num-terminal.store[type]))
+                }
+            }
     }
 }
 function assignPowerCreep(){
@@ -387,10 +285,6 @@ function assignPowerCreep(){
             this.spawn(Game.rooms[this.memory.parent].powerSpawn)
             return
         }
-        // if (this.room.name!=this.memory.parent){
-        //     this.moveTo(Game.rooms[this.memory.parent].powerSpawn)
-        //     return;
-        // }
         if (this.hits<this.hitsMax){
             this.room.heal(this)
         }
@@ -404,14 +298,11 @@ function assignPowerCreep(){
                 this.moveTo(this.room.storage)
             }
             return;
-        } else if (this.store.getFreeCapacity()<=200){
-            if (this.transfer(this.room.storage,RESOURCE_OPS,this.store[RESOURCE_OPS]-220)===ERR_NOT_IN_RANGE){
-                this.moveTo(this.room.storage)
-            }
-            return
-        }else if (this.ticksToLive<=500){
+        } else if (this.ticksToLive<=500){
             this.moveTo(this.room.powerSpawn)
-            this.renew(this.room.powerSpawn)
+            if (this.room.memory.prop.regen||util.isEqual(this.pos,this.room.powerSpawn.pos)){
+                this.renew(this.room.powerSpawn)
+            }
             return
         }
         if (this.room.memory.prop.opExt){
@@ -426,8 +317,14 @@ function assignPowerCreep(){
                 this.moveTo(o)
             }else {
                 delete this.memory.tasks[pwr]
-                return
             }
+            return
+        }
+        if (this.store.getFreeCapacity()<=200){
+            if (this.transfer(this.room.storage,RESOURCE_OPS,this.store[RESOURCE_OPS]-220)===ERR_NOT_IN_RANGE){
+                this.moveTo(this.room.storage)
+            }
+            return
         }
         this.usePower(PWR_GENERATE_OPS)
     }
@@ -436,14 +333,6 @@ function assignPowerCreep(){
             this.memory.tasks[pwr]=id
         }
     }
-}
-
-function min(a,b){
-    return a<b?a:b;
-}
-const prices={
-    U: 0.75,
-    Z: 9.5
 }
 /**
  * @param orders {Order[]}

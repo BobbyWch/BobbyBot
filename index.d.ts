@@ -4,9 +4,17 @@ interface Memory{
     factorys: { [id: string]: FactoryMemory };
     terminals: { [id: string]: TerminalMemory };
     labs:{[id: string]: LabMemory};
-    creepConfigs;
+    creepConfigs:object;
+    avoids:Array;
 }
 interface CreepMemory{
+    farMove:{
+        index:number;
+        path:Array;
+        targetPos:string;
+    };
+    prePos:string;
+    stand:boolean;
     belong: string;
     role: string;
     task: StructureConstant;
@@ -18,6 +26,12 @@ interface CreepMemory{
     endTime:number;
     state:string;
     taskId: Id<Structure>;
+    needBoost:MineralBoostConstant[];
+    boosted:boolean;
+    say:{
+        index:number;
+        child:number;
+    };
 }
 interface RoomMemory{
     carryTasks: { [owner: StructureConstant]: CarryTask };
@@ -31,11 +45,28 @@ interface RoomMemory{
     _heal:Id<AnyCreep>;
     enemy:Id<AnyCreep>;
     prop:RoomProperty;
-    spawns:Id<StructureSpawn>[];
     tasks:SpawnTask[];
     labs:LabMemory;
+    upgInfo:{
+        level:number;
+        con:Id<StructureContainer>;
+        link:Id<StructureLink>;
+    };
+    boost:{ [mineralName: MineralBoostConstant]: {
+        users:string[];
+        lab:Id<StructureLab>;
+        amount:number;
+        } };
+    mission:MissionModel[];
+    wantUpg:boolean;
 }
-
+interface MissionModel{
+    id:string;
+    type:string;
+    parent:string;
+    data:any;
+    startTime:number;
+}
 interface LabMemory{
     main1: Id<StructureLab>;
     main2: Id<StructureLab>;
@@ -56,6 +87,7 @@ interface RoomProperty{
     extStore:number;
     opExt:number;
     regen:number;
+    lab:number;
 }
 interface Game{
     sell:{[type:ResourceConstant]: Order[]};

@@ -5,15 +5,11 @@ for (const n in Game.rooms) {
         mem=r.memory
         notNull(mem,"carryTasks",{})
         notNull(mem,"centerTasks",{})
-        notNull(mem,"structs",{})
         notNull(mem,"tasks",[])
         notNull(mem,"mission",[])
         notNull(mem,"ids",{})
         notNull(mem,"prop",{})
-        r.memory.spawns=[]
-        for (const s of r.find(FIND_MY_SPAWNS)){
-            r.memory.spawns.push(s.id)
-        }
+        notNull(mem,"boost",{})
         if (r.terminal){
             mem=r.terminal.memory
             notNull(mem,"deals",[])
@@ -27,85 +23,87 @@ function notNull(mem,name,value){
     }
 }
 const color=Logger.color
-const RED=Colors.red
 const YELLOW=Colors.yellow
 const BLUE=Colors.blue
-missionMap={
-    clearLab(room){
-        for (const id of room.memory.labs.others){
-            if (Game.getObjectById(id).clear()){
-                return
-            }
-        }
-        room.deleteMission("clearLab")
-        console.log("任务结束")
-    }
-}
 Room.prototype.work=function() {
-    if (this.controller.level>5) {
-        const property = this.memory.prop
-        if (property.power) {
-            this.powerSpawn.processPower()
-            if (!this.powerSpawn.store[RESOURCE_ENERGY]) {
-                if (this.storage.store[RESOURCE_ENERGY] >= 300000) {
-                    this.centerTask(this.storage, this.powerSpawn, RESOURCE_ENERGY, 5000)
-                }
-            } else if (!this.powerSpawn.store[RESOURCE_POWER]) {
-                if (this.storage.store[RESOURCE_POWER] >= 200) {
-                    this.centerTask(this.storage, this.powerSpawn, RESOURCE_POWER, 100)
+    if (Game.time % 2) {
+        const hostiles = this.find(FIND_HOSTILE_CREEPS)
+        if (hostiles.length) {
+            let closest
+            for (const creep of hostiles) {
+                if (closest) {
+                    if (creep.pos.getRangeTo(25, 25) < closest.pos.getRangeTo(25, 25)) {
+                        closest = creep;
+                    }
+                } else {
+                    closest = creep;
                 }
             }
+            if (closest) {
+                this.memory.enemy = closest.id;
+            }
         }
+    }
+    const property = this.memory.prop
+    if (property.power) {
+        this.powerSpawn.processPower()
+        if (!this.powerSpawn.store[RESOURCE_ENERGY]) {
+            if (this.storage.store[RESOURCE_ENERGY] >= 300000) {
+                this.centerTask(this.storage, this.powerSpawn, RESOURCE_ENERGY, 5000)
+            }
+        } else if (!this.powerSpawn.store[RESOURCE_POWER]) {
+            if (this.storage.store[RESOURCE_POWER] >= 200) {
+                this.centerTask(this.storage, this.powerSpawn, RESOURCE_POWER, 100)
+            }
+        }
+    }
+    if (property.factory) {
+        this.factory.work()
+    }
+    if (this.terminal) {
         this.storage.balance()
-        if (property.factory) {
-            this.factory.work()
+        this.terminal.work()
+    }
+    let result
+    const missions=this.memory.mission
+    for (let i=0;i<missions.length;i++) {
+        result=missionMap[missions[i].type](this,missions[i])
+        if (result!=OK){
+            missions.splice(i,1)
+            i--
         }
-        if (this.terminal) {
-            this.terminal.work()
+    }
+    if (property.pc) {
+        this.pc().work()
+    }
+    if (property.extStore && (!this.storage.effects.length || this.storage.effects[0].ticksRemaining < 70)) {
+        this.pc().addTask(PWR_OPERATE_STORAGE, this.storage.id)
+    }
+    if (Game.time % 2000 == 0) {
+        if (this.controller.level == 8 && this.controller.ticksToDowngrade < 120000) {
+            this.addTask({role: config.upgrader}, false)
         }
-        for (const m of this.memory.mission) {
-            missionMap[m](this)
-        }
-        if (property.pc) {
-            this.pc().work()
-        }
-        if (property.extStore && (!this.storage.effects.length || this.storage.effects[0].ticksRemaining < 70)) {
-            this.pc().addTask(PWR_OPERATE_STORAGE, this.storage.id)
-        }
-        if (Game.time%2000==0) {
-            if (this.controller.level==8&&this.controller.ticksToDowngrade<110000){
-                this.addBodyTask([WORK, CARRY, MOVE], {role: config.upgrader}, false)
-            }
-            if (!CreepApi.numOf(config.miner,this.name)){
-                if (this.find(FIND_MINERALS)[0].mineralAmount){
-                    CreepApi.add(config.miner,this.name)
+        if (this.find(FIND_MINERALS)[0].pos.lookFor(LOOK_STRUCTURES).find(o=>o.structureType==STRUCTURE_EXTRACTOR)){
+            if (!CreepApi.numOf(config.miner, this.name)) {
+                if (this.find(FIND_MINERALS)[0].mineralAmount) {
+                    CreepApi.add(config.miner, this.name)
                 }
             }
         }
+    }
+    if (property.lab) {
         this.runLab()
+    }
+    if (this.controller.level > 6) {
+        if (Game.time % 25 == 0) {
+            Tower.repair(this)
+        }
     } else {
-        if (!this.memory.tasks.length) {
-            this.addTask({role: config.worker})
+        if (Game.time % 10 == 0) {
+            Tower.repair(this)
         }
-        if (Game.time % 30 == 0) {
-            let i = 0
-            let c
-            for (c of this.find(FIND_MY_CREEPS)) {
-                if (c.memory.work == "fill") {
-                    i++
-                }
-            }
-            if (i < 2) {
-                if (c) {
-                    c.memory.work = "fill"
-                }
-            }
-        }
-        return
     }
-    if (Game.time % 25 == 0) {
-        Tower.repair(this)
-    }
+
     if (this.memory._heal) {
         const cr = Game.getObjectById(this.memory._heal)
         if (cr.hits == cr.hitsMax) {
@@ -126,17 +124,6 @@ Room.prototype.work=function() {
             Tower.attack(this, enemy)
         } else {
             delete this.memory.enemy
-        }
-    }
-    if (Game.time % 10 == 0) {
-        if (this.memory.oldLevel) {
-            if (this.controller.level != this.memory.oldLevel) {
-                this.onUpgrade(this.controller.level)
-            }
-        } else {
-            if (this.controller.level != 8) {
-                this.memory.oldLevel = this.controller.level
-            }
         }
     }
 }
@@ -173,31 +160,66 @@ Room.prototype.flushSite=function (){
  * @return {Structure} Should repair
  */
 Room.prototype.callAfterBuilt=function (){
-    if (this.memory._build.type==STRUCTURE_SPAWN){
-        const info=this.memory._build
-        const s=new RoomPosition(info.x,info.y,this.name).lookFor(LOOK_STRUCTURES).find(o=>o.structureType==info.type)
-        this.memory.spawns.push(s.id)
-    }else if (this.memory._build.type==STRUCTURE_WALL||this.memory._build.type==STRUCTURE_RAMPART){
+    if (this.memory._build.type==STRUCTURE_EXTENSION){
+        return null
+    }
+    const info=this.memory._build
+    const structure=new RoomPosition(info.x,info.y,this.name).lookFor(LOOK_STRUCTURES).find(o=>o.structureType==info.type)
+    if (this.memory._build.type==STRUCTURE_WALL||this.memory._build.type==STRUCTURE_RAMPART){
         if (!CreepApi.numOf(config.repairer,this.name)){
             CreepApi.add(config.repairer,this.name)
         }
-        const info=this.memory._build
-        return new RoomPosition(info.x,info.y,this.name).lookFor(LOOK_STRUCTURES).find(o=>o.structureType==info.type)
+        return structure
     }else if (this.memory._build.type==STRUCTURE_LAB){
         if (this.find(FIND_MY_STRUCTURES,{filter:o=>o.structureType==STRUCTURE_LAB}).length==10){
             this.initLab()
         }
     }else if (this.memory._build.type==STRUCTURE_TOWER){
-        const info=this.memory._build
-        Tower.addTower(this,new RoomPosition(info.x,info.y,this.name).lookFor(LOOK_STRUCTURES).find(o=>o.structureType==info.type))
+        Tower.addTower(this,structure)
+    }else if (this.memory._build.type==STRUCTURE_CONTAINER){
+        if (structure.pos.findInRange(FIND_MY_STRUCTURES,4).find(o=>o.structureType==STRUCTURE_CONTROLLER)){
+            if (!this.memory.upgInfo){
+                this.memory.upgInfo={}
+                this.memory.upgInfo.level=this.controller.level
+            }
+            this.memory.upgInfo.con=structure.id
+            //确保2个carrier，1个给controller
+            if (CreepApi.numOf(config.carrier,this.name)<2){
+                CreepApi.add(config.carrier,this.name)
+            }
+        }
+    }else if (this.memory._build.type==STRUCTURE_LINK){
+        if (structure.pos.findInRange(FIND_MY_STRUCTURES,4).find(o=>o.structureType==STRUCTURE_CONTROLLER)){
+            if (!this.memory.upgInfo){
+                this.memory.upgInfo={}
+                this.memory.upgInfo.level=this.controller.level
+            }
+            this.memory.upgInfo.link=structure.id
+            //取消额外的carrier
+            if (CreepApi.numOf(config.carrier,this.name)==2){
+                CreepApi.remove(config.carrier,this.name)
+            }
+        }
     }
     return null
 }
-Room.prototype.addMission=function (name){
-    this.memory.mission.push(name)
+Room.prototype.addMission=function (type,data){
+    this.memory.mission.push({
+        type:type,
+        data:data,
+        parent:this.name,
+        startTime:Game.time,
+        id:util.getId("d")
+    })
 }
-Room.prototype.deleteMission=function (name){
-    this.memory.mission=this.memory.mission.filter(o=>o!=name)
+Room.prototype.deleteMission=function (id){
+    const missions=this.memory.mission
+    for (let i=0;i<missions.length;i++){
+        if (missions[i].id==id){
+            missions.splice(i,1)
+            return
+        }
+    }
 }
 const noModify=function (value){}
 /**
@@ -225,7 +247,13 @@ Object.defineProperty(Room.prototype, 'upLink', {get: function() {
             if (this.memory.ids._ul){
                 this._ul=Game.getObjectById(this.memory.ids._ul)
             }else {
+                if (!this.memory.upgInfo.link) {
+                    return null
+                }
                 this._ul=this.controller.pos.findInRange(FIND_MY_STRUCTURES,3).find(o=>o.structureType===STRUCTURE_LINK)
+                if (!this._ul) {
+                    return null
+                }
                 this.memory.ids._ul=this._ul.id
             }
         }
@@ -292,60 +320,77 @@ Room.prototype.heal=function (ac){
 }
 /**
  *
- * @param c {Creep}
- * @param type {ResourceConstant}
- * @param num {number}
- * @return {ScreepsReturnCode}
+ * @param creep {Creep}
  */
-Room.prototype.boost=function (c,type,num){
-    const mem=this.memory
-    if (!mem.boost){
-        mem.boost={}
+Room.prototype.boost=function (creep){
+    if (creep.spawning){
+        return;
     }
-    const labId=mem.boost[c.name+type]
-    if (labId){
-        /**@type {StructureLab}*/
-        const lab=Game.getObjectById(labId)
-        if (!c.spawning){
-            if (c.boosts().includes(type)){
-                return OK
-            }
-            if (c.pos.isNearTo(lab)){
-                if (lab.store.getUsedCapacity(type)>=num){
-                    return lab.boostCreep(c)
-                }else {
-                    return ERR_NOT_ENOUGH_RESOURCES
-                }
-            }else {
-                c.moveTo(lab)
-                return ERR_NOT_IN_RANGE
-            }
-        }
-    }else {
+    const allInfo = this.memory.boost
+    const needs=creep.memory.needBoost
+    let res,info,result,lab
+    for (let i=0;i<needs.length;i++){
+        res=needs[i]
+        info=allInfo[res]
         /**
          * @type {StructureLab}
          */
-        let lab
-        for (const id of mem.labs.others){
-            lab=Game.getObjectById(id)
-            if (!lab.memory.boosting){
-                lab.memory.boosting=true
-                mem.boost[c.name+type]=id
-                if (lab.mineralType){
-                    if (lab.mineralType==type){
-                        if (lab.store.getUsedCapacity(type)>=num){
-                            return ERR_BUSY
-                        }
-                    }else {
-                        lab.clear()
-                    }
-                }
-                lab.getS(type,num)
-                return ERR_NOT_ENOUGH_RESOURCES
+        lab=Game.getObjectById(info.lab)
+        result=lab.boostCreep(creep)
+        if (result==OK){
+            needs.splice(i,1)
+            i--
+            info.users.splice(info.users.indexOf(creep.name),1)
+            info.amount-=creep.boostInfo()[res]
+            if (!info.users.length){
+                this.memory.labs.others.push(info.lab)
+                delete allInfo[res]
             }
+            continue
+        }else if (result==ERR_NOT_IN_RANGE) {
+            creep.moveTo(lab)
         }
-        return ERR_BUSY
+        return;
     }
+    creep.memory.boosted=true
+    delete creep.memory.needBoost
+}
+/**
+ * @param creep {Creep}
+ */
+Room.prototype.prepareBoost=function (creep) {
+    const allInfo = this.memory.boost
+    let info, lab
+    for (const res of creep.memory.needBoost) {
+        info = allInfo[res]
+        if (!info) {
+            info = {}
+            allInfo[res] = info
+            info.users = []
+            info.amount = 0
+            info.lab = this.memory.labs.others.shift()
+        }
+        if (!info.users.includes(creep.name)) {
+            info.users.push(creep.name)
+            info.amount+=creep.boostInfo()[res]
+        }
+        lab = Game.getObjectById(info.lab)
+        if (lab.store[lab.mineralType]){
+            if (lab.mineralType==res){
+                if (lab.store[res]<info.amount&&lab.store[res]<3000){
+                    lab.getS(res)
+                    return false
+                }
+            }else {
+                lab.takeS(lab.mineralType)
+                return false
+            }
+        }else {
+            lab.getS(res)
+            return false
+        }
+    }
+    return true
 }
 Room.prototype.getStore=function (){
     if (!this._ast){
@@ -374,18 +419,6 @@ Room.prototype.getStore=function (){
     return this._ast
 }
 /**
- * @param c {Creep}
- */
-Room.prototype.freeLab=function (c,type){
-    const mem=this.memory
-    if (mem.boost[c.name+type]){
-        /** @type {StructureLab}*/
-        const lab=Game.getObjectById(mem.boost[c.name+type])
-        delete lab.memory.boosting
-        delete mem.boost[c.name+type]
-    }
-}
-/**
  * @returns {PowerCreep}
  */
 Room.prototype.pc=function (){
@@ -411,59 +444,6 @@ Room.prototype.addTask = function (mem,addToFirst) {
         this.memory.tasks.splice(0,0,{ _role: mem.role, _mem: mem });
     } else {
         this.memory.tasks.push({ _role: mem.role, _mem: mem });
-    }
-}
-const spawnIgnore=[config.harvester]
-const rand=Math.random
-Room.prototype.doSpawn=function (counter){
-    /**@type {StructureSpawn[]}*/
-    const spawns=[]
-    for (const sid of this.memory.spawns){
-        spawns.push(Game.getObjectById(sid))
-    }
-    for (const spawn of spawns) {
-        if (!spawn.spawning) {
-            if (this.memory.tasks.length === 0) {
-                for (const index in global.roles) {
-                    if (spawnIgnore.includes(index)) {
-                        continue;
-                    }
-                    if (counter[index] < CreepApi.numOf(index,this.name) && this.energyAvailable >= global.roles[index].cost) {
-                        spawn.spawnCreep(global.roles[index].parts, `c${Game.time%10000}_${0|rand()*1000}`, {
-                            memory: {
-                                role: index,
-                                belong: this.name
-                            }
-                        });
-                        counter[index]++
-                        break;
-                    }
-                }
-            } else {
-                const newCreep = this.memory.tasks[0];
-                let name
-                if (newCreep._mem.name){
-                    name=newCreep._mem.name
-                    delete newCreep._mem.name
-                }else {
-                    name=`c${Game.time%10000}_${0|Math.random()*1000}`
-                }
-                if (newCreep._role && global.roles[newCreep._role]) {
-                    if (this.energyAvailable >= global.roles[newCreep._role].cost) {
-                        newCreep._mem.belong=this.name
-                        spawn.spawnCreep(global.roles[newCreep._role].parts, name, {memory: newCreep._mem});
-                        counter[newCreep._role]++
-                        this.memory.tasks.shift()
-                    }
-                } else {
-                    if (this.energyAvailable >= global.getCost(newCreep._body)) {
-                        newCreep._mem.belong=this.name
-                        spawn.spawnCreep(newCreep._body, name, {memory: newCreep._mem});
-                        this.memory.tasks.shift()
-                    }
-                }
-            }
-        }
     }
 }
 Room.prototype.getSource = function () {
@@ -499,26 +479,26 @@ Room.prototype.findRes=function (type,num){
  * @param res {ResourceConstant}
  * @param num {number}
  */
-Room.prototype.addCarryTask=function(struct,type,res,num){
-    if (this.memory.carryTasks[struct.structureType]){
+Room.prototype.addCarryTask=function(struct,type,res,num,owner){
+    if (!owner){
+        owner=struct.structureType
+    }
+    if (this.memory.carryTasks[owner]){
         return;
     }
-    this.memory.carryTasks[struct.structureType]={
+    this.memory.carryTasks[owner]={
         type: type,
         target: struct.id,
         res: res,
         num: num
     }
-    console.log(`${this.name} CarryTask:${struct.structureType} ${res}  ${num}`)
+    console.log(`${this.name} CarryTask:${owner} ${res}  ${num}`)
 }
 Room.prototype.deleteTask=function (owner){
     delete this.memory.carryTasks[owner]
 }
 Room.prototype.deleteCenter=function (id){
     delete this.memory.centerTasks[id]
-}
-Room.prototype.clearLabs=function () {
-    this.addMission("clearLab")
 }
 Room.prototype.runLab=function (){
     const mem=this.memory.labs
@@ -531,7 +511,7 @@ Room.prototype.runLab=function (){
             const lab1=Game.getObjectById(mem.main1)
             if (lab1.store[lab1.mineralType]){
                 if (lab1.mineralType==mem.src1){
-                    if (lab1.store[mem.src1]<700){
+                    if (lab1.store[mem.src1]<1000){
                         lab1.getS(mem.src1)
                         return;
                     }
@@ -547,7 +527,7 @@ Room.prototype.runLab=function (){
             const lab2=Game.getObjectById(mem.main2)
             if (lab2.store[lab2.mineralType]){
                 if (lab2.mineralType==mem.src2){
-                    if (lab2.store[mem.src2]<700){
+                    if (lab2.store[mem.src2]<1000){
                         lab2.getS(lab2.mineralType)
                         return;
                     }
@@ -610,30 +590,58 @@ for (const key in REACTIONS){
     }
 }
 const labInfo=[
-    ["OH",2000],
+    ["OH",6000],
     ["ZK",2000],
     ["UL",2000],
     ["G",10000],
+    ["ZO",2000],
+    ["ZHO2",4000],
+    ["XZHO2",5000],
+    ["ZH",2000],
+    ["ZH2O",2000],
+    ["XZH2O",5000],
     ["GO",2000],
     ["GHO2",2000],
+    ["XGHO2",5000],
     ["KO",2000],
     ["KHO2",2000],
-    ["ZO",2000],
-    ["ZHO2",2000],
-    ["ZH",2000],
-    ["ZH2O",2000]]
-Room.prototype.planLab=function (){
-    const mem=this.memory.labs
-    const st=this.getStore()
-    for (const k of labInfo){
-        if (!st[k[0]]||st[k[0]]<k[1]){
-            mem.src1=labMap[k[0]][0]
-            mem.src2=labMap[k[0]][1]
-            break
+    ["XKHO2",5000],
+    ["LO",2000],
+    ["LHO2",2000],
+    ["XLHO2",5000],
+    ["UH",2000],
+    ["UH2O",2000],
+    ["XUH2O",5000],
+]
+Room.prototype.planLab=function () {
+    const mem = this.memory.labs
+    const st = this.getStore()
+    const ext = (this.storage.effects && this.storage.effects.length) && true
+    for (const k of labInfo) {
+        if (ext) {
+            if (k[0].length == 5) {
+                if (!st[k[0]] || st[k[0]] < k[1] * 4) {
+                    mem.src1 = labMap[k[0]][0]
+                    mem.src2 = labMap[k[0]][1]
+                    break
+                }
+            } else {
+                if (!st[k[0]] || st[k[0]] < k[1]) {
+                    mem.src1 = labMap[k[0]][0]
+                    mem.src2 = labMap[k[0]][1]
+                    break
+                }
+            }
+        } else {
+            if (!st[k[0]] || st[k[0]] < k[1]) {
+                mem.src1 = labMap[k[0]][0]
+                mem.src2 = labMap[k[0]][1]
+                break
+            }
         }
     }
     console.log(`${this.name} lab plan: ${mem.src1} ${mem.src2}`)
-    mem.state="prepare"
+    mem.state = "prepare"
 }
 Room.prototype.initLab=function(){
     this.memory.labs={}
@@ -679,7 +687,15 @@ Room.prototype.centerTask=function (from,to,res,num){
 }
 Room.prototype.onUpgrade=function (newLevel){
     if (newLevel==8){
-        delete this.memory.oldLevel
+        delete this.memory.upgInfo
         CreepApi.remove(config.upgrader,this.name)
+    }else {
+        this.memory.upgInfo.level=newLevel
     }
+    if (newLevel==6){
+        this.find(FIND_MINERALS)[0].pos.createConstructionSite(STRUCTURE_EXTRACTOR)
+    }
+}
+Room.prototype.getRestrictedPos=function (){
+    return {}
 }

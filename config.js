@@ -20,6 +20,18 @@ global.getCost=function(parts) {
     }
     return s;
 }
+/**
+ * @param args {[{BodyPartConstant}|{number}][]}
+ */
+global.calc=(args)=>{
+    const arr=[]
+    for (const pair of args){
+        for (let i=0;i<pair[1];i++){
+            arr.push(pair[0])
+        }
+    }
+    return arr
+}
 module.exports = {
     upgrader: upgrader,
     builder: builder,
@@ -41,28 +53,104 @@ roles[spawner] = {
     parts: calc([[CARRY,16],[MOVE,8]])
 }
 roles[carrier] = {
-    parts: calc([[CARRY,16],[MOVE,8]])
+    parts: calc([[CARRY,16],[MOVE,8]]),
+    adapt:(level)=>{
+        switch (level){
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+                calc([[CARRY,16],[MOVE,8]])
+            case 5:
+                return calc([[CARRY,20],[MOVE,10]])
+            case 6:
+                return calc([[CARRY,24],[MOVE,12]])
+            case 7:
+            case 8:
+                return calc([[CARRY,16],[MOVE,8]])
+        }
+    }
 }
 roles[harvester] = {
-    parts: calc([[WORK,15],[MOVE,4],[CARRY,3]])
+    parts: calc([[WORK,15],[MOVE,4],[CARRY,3]]),
+    adapt:(level)=>{
+        switch (level){
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+                return calc([[WORK,8],[MOVE,2],[CARRY,2]])
+            case 7:
+            case 8:
+                return calc([[WORK,15],[MOVE,4],[CARRY,3]])
+        }
+    }
 }
+
 roles[repairer] = {
-    parts: calc([[CARRY,20],[MOVE,15],[WORK,10]])
+    parts: calc([[CARRY,15],[MOVE,15],[WORK,15]])
 }
 roles[upgrader] = {
-    parts: calc([[CARRY,3],[MOVE,15],[WORK,30]])
+    parts: calc([[CARRY,3],[MOVE,15],[WORK,30]]),
+    adapt:(level)=>{
+        switch (level){
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+                return calc([[WORK,8],[MOVE,2],[CARRY,2]])
+            case 5:
+                return calc([[WORK,10],[MOVE,2],[CARRY,2]])
+            case 6:
+                return calc([[WORK,12],[MOVE,3],[CARRY,2]])
+            case 7:
+                return  calc([[CARRY,3],[MOVE,15],[WORK,30]])
+            case 8:
+                return [WORK,MOVE,CARRY]
+        }
+    }
 }
 roles[cleaner] = {
-    parts: calc([[CARRY,30],[MOVE,4]])
+    parts: calc([[CARRY,30],[MOVE,4]]),
+    adapt:(level)=>{
+        switch (level){
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+                return calc([[CARRY,20],[MOVE,4]])
+            case 7:
+            case 8:
+                return calc([[CARRY,30],[MOVE,4]])
+        }
+    }
 }
 roles[builder] = {
-    parts: calc([[CARRY,21],[MOVE,13],[WORK,5]])
+    parts: calc([[CARRY,21],[MOVE,13],[WORK,5]]),
+    adapt:(level)=>{
+        switch (level){
+            case 1:
+            case 2:
+            case 3:
+            case 4:
+            case 5:
+            case 6:
+                return calc([[WORK,6],[MOVE,9],[CARRY,12]])
+            case 7:
+            case 8:
+                return calc([[CARRY,21],[MOVE,13],[WORK,5]])
+        }
+    }
 }
 roles[outMiner] = {
     parts: calc([[WORK,10],[CARRY,22],[MOVE,16]])
 }
 roles[claimer]={
-    parts: [CLAIM,MOVE]
+    parts: [MOVE,MOVE,MOVE,MOVE,CLAIM,MOVE]
 }
 roles[transfer]={
     parts:calc([[CARRY,25],[MOVE,25]])
@@ -71,7 +159,7 @@ roles[starter]={
     parts:calc([[WORK,5],[CARRY,20],[MOVE,25]])
 }
 roles[worker]={
-    parts:[WORK,WORK,MOVE,CARRY,CARRY,MOVE]
+    parts:[WORK,WORK,MOVE,CARRY,WORK,MOVE,CARRY,CARRY,MOVE]
 }
 roles[remote]={
     parts:calc([[WORK,10],[CARRY,10],[MOVE,10]])
@@ -82,9 +170,7 @@ roles[attacker]={
 roles[miner]={
     parts:calc([[WORK,16],[MOVE,4]])
 }
-for (const i in roles) {
-    roles[i].cost = global.getCost(roles[i].parts)
-}
+
 if (!Memory.creepConfigs) Memory.creepConfigs = {}
 /**
  * creep 发布 api

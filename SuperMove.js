@@ -48,25 +48,13 @@ require('超级移动优化').deletePathInRoom(roomName);
 /***************************************
  *  模块参数
  */
-// 初始化参数
-let config = {
-    地图房号最大数字超过100: false,
-    changeMove: true,   // 【未启用】为creep.move增加对穿能力
-    changeMoveTo: true, // 全面优化creep.moveTo，跨房移动也可以一个moveTo解决问题
-    changeFindClostestByPath: true,     // 【未启用】轻度修改findClosestByPath，使得默认按照ignoreCreeps寻找最短
-    autoVisual: false,  // 【未启用】
-    enableFlee: false   // 【未启用】是否添加flee()函数，注意这会在Creep.prototype上添加官方未有键值，flee()用法见最底下module.exports处
-}
 // 运行时参数 
 let pathClearDelay = 5000;  // 清理相应时间内都未被再次使用的路径，同时清理死亡creep的缓存，设为undefined表示不清除缓存
 let hostileCostMatrixClearDelay = 500; // 自动清理相应时间前创建的其他玩家房间的costMatrix
 let coreLayoutRange = 3; // 核心布局半径，在离storage这个范围内频繁检查对穿（减少堵路的等待
-let avoidRooms = []      // 永不踏入这些房间
-let avoidExits = {
-
-}   // 【未启用】单向屏蔽房间的一些出口，永不从fromRoom踏入toRoom
+let avoidRooms = ["W54S6"]      // 永不踏入这些房间
 /** @type {{id:string, roomName:string, taskQueue:{path:MyPath, idx:number, roomName:string}[]}[]} */
-let observers = ['5e3646219c6dc78024fd7097'];  // 如果想用ob寻路，把ob的id放这里
+let observers = [];  // 如果想用ob寻路，把ob的id放这里
 
 /***************************************
  *  局部缓存
@@ -90,16 +78,7 @@ let autoClearTick = Game.time;  // 用于避免重复清理缓存
 
 const obstacles = new Set(OBSTACLE_OBJECT_TYPES);
 const originMove = Creep.prototype.move;
-const originMoveTo = Creep.prototype.moveTo;
 // 统计变量
-let startTime;
-let endTime;
-let startCacheSearch;
-let analyzeCPU = { // 统计相关函数总耗时
-    move: { sum: 0, calls: 0 },
-    moveTo: { sum: 0, calls: 0 },
-    findClosestByPath: { sum: 0, calls: 0 }
-};
 let pathCounter = 0;
 let testCacheHits = 0;
 let testCacheMiss = 0;
@@ -108,9 +87,6 @@ let testNearStorageCheck = 0;
 let testNearStorageSwap = 0;
 let testTrySwap = 0;
 let testBypass = 0;
-let normalLogicalCost = 0;
-let cacheHitCost = 0;
-let cacheMissCost = 0;
 
 /***************************************
  *  util functions
@@ -124,22 +100,13 @@ function formalize(pos) {
     let splited = reg1.exec(pos.roomName);
     if (splited && splited.length == 5) {
         return { // 如果这里出现类型错误，那么意味着房间名字不是正确格式但通过了parse，小概率事件
-            x: (splited[1] === 'W' ? -splited[2] : +splited[2] + 1) * 50 + pos.x,
-            y: (splited[3] === 'N' ? -splited[4] : +splited[4] + 1) * 50 + pos.y
+            x: (splited[1] == 'W' ? -splited[2] : +splited[2] + 1) * 50 + pos.x,
+            y: (splited[3] == 'N' ? -splited[4] : +splited[4] + 1) * 50 + pos.y
         }
     } // else 房间名字不是正确格式
     return {}
 }
-
-/**
- *  阉割版isEqualTo，提速
- * @param {RoomPosition} pos1 
- * @param {RoomPosition} pos2 
- */
-function isEqual(pos1, pos2) {
-    return pos1.x == pos2.x && pos1.y == pos2.y && pos1.roomName == pos2.roomName;
-}
-
+const isEqual=util.isEqual
 /**
  *  兼容房间边界
  *  参数具有x和y属性就行
@@ -155,25 +122,26 @@ function isNear(pos1, pos2) {
         let splited2 = reg1.exec(pos2.roomName);
         if (splited1 && splited1.length == 5 && splited2 && splited2.length == 5) {
             // 统一到大地图坐标
-            let formalizedEW = (splited1[1] === 'W' ? -splited1[2] : +splited1[2] + 1) * 50 + pos1.x - (splited2[1] === 'W' ? -splited2[2] : +splited2[2] + 1) * 50 - pos2.x;
-            let formalizedNS = (splited1[3] === 'N' ? -splited1[4] : +splited1[4] + 1) * 50 + pos1.y - (splited2[3] === 'N' ? -splited2[4] : +splited2[4] + 1) * 50 - pos2.y;
+            let formalizedEW = (splited1[1] == 'W' ? -splited1[2] : +splited1[2] + 1) * 50 + pos1.x - (splited2[1] == 'W' ? -splited2[2] : +splited2[2] + 1) * 50 - pos2.x;
+            let formalizedNS = (splited1[3] == 'N' ? -splited1[4] : +splited1[4] + 1) * 50 + pos1.y - (splited2[3] == 'N' ? -splited2[4] : +splited2[4] + 1) * 50 - pos2.y;
             return -1 <= formalizedEW && formalizedEW <= 1 && -1 <= formalizedNS && formalizedNS <= 1;
         }
     }
     return false
 }
 
-/** 
-* @param {RoomPosition} pos1 
-* @param {RoomPosition} pos2 
-*/
+/**
+ * @param {RoomPosition} pos1
+ * @param {RoomPosition} pos2
+ * @param {number} range
+ */
 function inRange(pos1, pos2, range) {
     if (pos1.roomName == pos2.roomName) {
         return -range <= pos1.x - pos2.x && pos1.x - pos2.x <= range && -range <= pos1.y - pos2.y && pos1.y - pos2.y <= range;
     } else {
         pos1 = formalize(pos1);
         pos2 = formalize(pos2);
-        return pos1.x && pos2.x && inRange(pos1, pos2);
+        return pos1.x && pos2.x && inRange(pos1, pos2,range);
     }
 }
 
@@ -223,18 +191,9 @@ function getDirection(fromPos, toPos) {
         }
     }
 }
-
-let reg2 = /^[WE]([0-9]+)[NS]([0-9]+)$/;    // parse得到['E28N7','28','7']
-let isHighWay = config.地图房号最大数字超过100 ?
-    (roomName) => {
-        let splited = reg2.exec(roomName);
-        return splited[1] % 10 == 0 || splited[2] % 10 == 0;
-    } :
-    (roomName) => {
-        // E0 || E10 || E1S0 || [E10S0|E1S10] || [E10S10] 比正则再除快
-        return roomName[1] == 0 || roomName[2] == 0 || roomName[3] == 0 || roomName[4] == 0 || roomName[5] == 0;
-    }
-
+function isHighWay(roomName){
+    return roomName[1] == 0 || roomName[2] == 0 || roomName[3] == 0 || roomName[4] == 0 || roomName[5] == 0
+}
 /**
  *  缓存的路径和当前moveTo参数相同
  * @param {MyPath} path 
@@ -247,13 +206,13 @@ function isSameOps(path, ops) {
 }
 
 function hasActiveBodypart(body, type) {
-    if (!body) {
-        return true;
+    if (!body){
+        return true
     }
-    for (var i = body.length - 1; i >= 0; i--) {
+    for (let i = body.length - 1; i >= 0; i--) {
         if (body[i].hits <= 0)
-            break;
-        if (body[i].type === type)
+            return false;
+        if (body[i].type == type)
             return true;
     }
     return false;
@@ -282,8 +241,6 @@ function isObstacleStructure(room, pos, ignoreStructures) {
         }
     }
     return false;
-    // let possibleStructures = room.lookForAt(LOOK_STRUCTURES, pos);  // room.lookForAt比pos.lookFor快
-    // 万一有人把路修在extension上，导致需要每个建筑都判断，最多重叠3个建筑（rap+road+其他）
 }
 
 /**
@@ -509,7 +466,7 @@ function checkRoom(room, path, startIdx) {
                 addObTask(path, i + 1);     // 这格没有direction
                 break;
             }
-            i += 1;
+            i++;
         }
     }
     return true;
@@ -547,7 +504,7 @@ function trySwap(creep, pos, bypassHostileCreeps, ignoreCreeps) {     // ERR_NOT
 }
 
 let temporalAvoidFrom, temporalAvoidTo;
-function routeCallback(nextRoomName, fromRoomName) {    // 避开avoidRooms设置了的
+function routeCallback(nextRoomName) {    // 避开avoidRooms设置了的
     if (nextRoomName in avoidRooms) {
         return Infinity;
     }
@@ -557,7 +514,7 @@ function bypassRouteCallback(nextRoomName, fromRoomName) {
     if (fromRoomName == temporalAvoidFrom && nextRoomName == temporalAvoidTo) {
         return Infinity;
     }
-    return routeCallback(nextRoomName, fromRoomName);
+    return routeCallback(nextRoomName);
 }
 /**
  *  遇到跨房寻路，先以房间为单位寻route，再寻精细的path
@@ -776,7 +733,6 @@ function findPath(fromPos, toPos, ops) {
         PathFinderOpts.plainCost = ops.plainCost || 2;
         PathFinderOpts.swampCost = ops.swampCost || 10;
     }
-
     if (fromPos.roomName != toPos.roomName) {   // findRoute会导致非最优path的问题
         route = findRoute(fromPos.roomName, toPos.roomName);
         if (route == ERR_NO_PATH) {
@@ -785,13 +741,11 @@ function findPath(fromPos, toPos, ops) {
         PathFinderOpts.maxOps = ops.maxOps || 2000 + route.length ** 2 * 100;  // 跨10room则有2000+10*10*50=7000
         PathFinderOpts.maxRooms = PathFinderOpts.maxRooms || route.length + 1;
         route = route.reduce(routeReduce, { [fromPos.roomName]: 1 });   // 因为 key in Object 比 Array.includes(value) 快，但不知道值不值得reduce
-        //console.log(fromPos + ' using route ' + JSON.stringify(route));
         PathFinderOpts.roomCallback = roomCallbackWithRoute;
     } else {
         PathFinderOpts.maxOps = ops.maxOps;
         PathFinderOpts.roomCallback = roomCallback;
     }
-
     return PathFinder.search(fromPos, { pos: toPos, range: ops.range }, PathFinderOpts);
 }
 
@@ -836,7 +790,6 @@ let minX, maxX, minY, maxY;
  * @param {MoveToOpts} ops 
  */
 function findShortPathInCache(formalFromPos, formalToPos, fromPos, creepCache, ops) {     // ops.range设置越大找的越慢
-    startCacheSearch = Game.cpu.getUsed();
     minX = formalFromPos.x + formalFromPos.y - 2;
     maxX = formalFromPos.x + formalFromPos.y + 2;
     minY = formalToPos.x + formalToPos.y - 1 - ops.range;
@@ -867,7 +820,6 @@ function findShortPathInCache(formalFromPos, formalToPos, fromPos, creepCache, o
  * @param {MoveToOpts} ops
  */
 function findLongPathInCache(formalFromPos, formalToPos, creepCache, ops) {     // ops.range设置越大找的越慢
-    startCacheSearch = Game.cpu.getUsed();
     minX = formalFromPos.x + formalFromPos.y - 2;
     maxX = formalFromPos.x + formalFromPos.y + 2;
     minY = formalToPos.x + formalToPos.y - 1 - ops.range;
@@ -952,12 +904,6 @@ function moveOneStep(creep, visualStyle, toPos) {
     creepCache.idx++;
     creepMoveCache[creep.name] = Game.time;
     testNormal++;
-    let t = Game.cpu.getUsed() - startTime;
-    if (t > 0.2) {  // 对穿导致的另一个creep的0.2不计在内
-        normalLogicalCost += t - 0.2;
-    } else {
-        normalLogicalCost += t;
-    }
     return originMove.call(creep, creepCache.path.directionArray[creepCache.idx]);
 }
 
@@ -990,27 +936,6 @@ function startRoute(creep, pathCache, visualStyle, toPos, ignoreCreeps) {
         trySwap(creep, nextStep, false, true);
     }
     return originMove.call(creep, getDirection(creep.pos, posArray[idx]));
-}
-
-/**
- * @param {Function} fn 
- */
-function wrapFn(fn, name) {
-    return function () {
-        startTime = Game.cpu.getUsed();
-        if (obTick < Game.time) {
-            obTick = Game.time;
-            checkObResult();
-            doObTask();
-        }
-        let code = fn.apply(this, arguments);
-        endTime = Game.cpu.getUsed();
-        if (endTime - startTime >= 0.2) {
-            analyzeCPU[name].sum += endTime - startTime;
-            analyzeCPU[name].calls++;
-        }
-        return code;
-    }
 }
 
 function clearUnused() {
@@ -1059,6 +984,11 @@ let [ops, toPos, creepCache, path, idx, posArray, found] = [];
  * @param {MoveToOpts} opts 
  */
 function betterMoveTo(firstArg, secondArg, opts) {
+    if (obTick < Game.time) {
+        obTick = Game.time;
+        checkObResult();
+        doObTask();
+    }
     if (!this.my) {
         return ERR_NOT_OWNER;
     }
@@ -1086,14 +1016,9 @@ function betterMoveTo(firstArg, secondArg, opts) {
         }
         creepMoveCache[this.name] = Game.time;      // 用于防止自己移动后被误对穿
         testNormal++;
-        let t = Game.cpu.getUsed() - startTime;
-        normalLogicalCost += t > 0.2 ? t - 0.2 : t;
         return originMove.call(this, getDirection(this.pos, toPos));
     }
     ops.range = ops.range || 1;
-    if (!hasActiveBodypart(this.body, MOVE)) {
-        return ERR_NO_BODYPART;
-    }
     if (this.fatigue) {
         if (!ops.visualizePathStyle) {    // 不用画路又走不动，直接return
             return ERR_TIRED;
@@ -1225,7 +1150,6 @@ function betterMoveTo(firstArg, secondArg, opts) {
     }
     creepCache.dst = toPos;
     setPathTimer(creepCache);
-    found ? cacheHitCost += Game.cpu.getUsed() - startCacheSearch : cacheMissCost += Game.cpu.getUsed() - startCacheSearch;
     return startRoute(this, creepCache, ops.visualizePathStyle, toPos, ops.ignoreCreeps);
 }
 /***************************************
@@ -1248,32 +1172,8 @@ observers = observers.reduce((temp, id) => {
     }
     return temp;
 }, []);
-Creep.prototype.rawMt=Creep.prototype.moveTo
-Creep.prototype.moveTo = wrapFn(config.changeMoveTo ? betterMoveTo : originMoveTo, 'moveTo');
+Creep.prototype.moveTo = betterMoveTo
 module.exports = {
-    setChangeMove: function (bool) {
-        analyzeCPU.move = { sum: 0, calls: 0 };
-        return OK;
-    },
-    setChangeMoveTo: function (bool) {
-        Creep.prototype.moveTo = wrapFn(bool ? betterMoveTo : originMoveTo, 'moveTo');
-        analyzeCPU.moveTo = { sum: 0, calls: 0 };
-        testCacheHits = 0;
-        testCacheMiss = 0;
-        testNormal = 0;
-        testNearStorageCheck = 0;
-        testNearStorageSwap = 0;
-        testTrySwap = 0;
-        testBypass = 0;
-        normalLogicalCost = 0;
-        cacheHitCost = 0;
-        cacheMissCost = 0;
-        return OK;
-    },
-    setChangeFindClostestByPath: function (bool) {
-        analyzeCPU.findClosestByPath = { sum: 0, calls: 0 };
-        return OK;
-    },
     setPathClearDelay: function (number) {
         if (typeof number == "number" && number > 0) {
             pathClearDelay = Math.ceil(number);
@@ -1342,41 +1242,5 @@ module.exports = {
         } else {
             return ERR_INVALID_ARGS;
         }
-    },
-    addAvoidExits: function (fromRoomName, toRoomName) {    // 【未启用】
-        let splited1 = reg1.exec(fromRoomName);
-        let splited2 = reg1.exec(toRoomName);
-        if (splited1 && splited1.length == 5 && splited2 && splited2.length == 5) {
-            avoidExits[fromRoomName] ? avoidExits[fromRoomName][toRoomName] = 1 : avoidExits[fromRoomName] = { [toRoomName]: 1 };
-            return OK;
-        } else {
-            return ERR_INVALID_ARGS;
-        }
-    },
-    deleteAvoidExits: function (fromRoomName, toRoomName) { // 【未启用】
-        let splited1 = reg1.exec(fromRoomName);
-        let splited2 = reg1.exec(toRoomName);
-        if (splited1 && splited1.length == 5 && splited2 && splited2.length == 5) {
-            if (fromRoomName in avoidExits && toRoomName in avoidExits[fromRoomName]) {
-                delete avoidExits[fromRoomName][toRoomName];
-            }
-            return OK;
-        } else {
-            return ERR_INVALID_ARGS;
-        }
-    },
-    print: function () {
-        let text = '\navarageTime\tcalls\tFunctionName';
-        for (let fn in analyzeCPU) {
-            text += `\n${(analyzeCPU[fn].sum / analyzeCPU[fn].calls).toFixed(5)}\t\t${analyzeCPU[fn].calls}\t\t${fn}`;
-        }
-        let hitCost = cacheHitCost / testCacheHits;
-        let missCost = cacheMissCost / testCacheMiss;
-        let missRate = testCacheMiss / (testCacheMiss + testCacheHits);
-        text += `\nnormal logical cost: ${(normalLogicalCost / testNormal).toFixed(5)}, total cross rate: ${(testTrySwap / analyzeCPU.moveTo.calls).toFixed(4)}, total bypass rate:  ${(testBypass / analyzeCPU.moveTo.calls).toFixed(4)}`
-        text += `\nnear storage check rate: ${(testNearStorageCheck / analyzeCPU.moveTo.calls).toFixed(4)}, near storage cross rate: ${(testNearStorageSwap / testNearStorageCheck).toFixed(4)}`
-        text += `\ncache search rate: ${((testCacheMiss + testCacheHits) / analyzeCPU.moveTo.calls).toFixed(4)}, total hit rate: ${(1 - missRate).toFixed(4)}, avg check paths: ${(pathCounter / (testCacheMiss + testCacheHits)).toFixed(3)}`;
-        text += `\ncache hit avg cost: ${(hitCost).toFixed(5)}, cache miss avg cost: ${(missCost).toFixed(5)}, total avg cost: ${(hitCost * (1 - missRate) + missCost * missRate).toFixed(5)}`;
-        return text;
     }
 }

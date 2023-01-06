@@ -61,11 +61,11 @@ global.Tower = {
                     }
                 }
             }else if(struct.structureType==STRUCTURE_CONTAINER){
-                if(struct.hits<180000){
+                if(struct.hits<220000){
                     for(;i<towers.length;i++){
                         towers[i].repair(struct)
                     }
-                    return
+                    break
                 }
             }
         }
